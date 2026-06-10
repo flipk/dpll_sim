@@ -9,14 +9,16 @@ exit 0
 #endif
 
 #if 0
-plot "plot.dat" using 1:2 with lines
-bind "q" "stop=1"
+# no set terminal qt noraise
 
-stop=0
-while (!stop) {
-    pause 0.1
-    replot
-}
+WAYLAND_DISPLAY= gnuplot
+set terminal x11 noraise
+
+bind "q" "stop=1"
+reset_and_plot = "stats 'plot.dat' using 3 nooutput ; start_line = int(STATS_records - 500) ; plot 'plot.dat' every ::start_line using 3 with lines title 'phase error'"
+repeat_plot = "stop = 0; while (!stop) { pause 0.2 ; eval reset_and_plot }"
+eval repeat_plot
+
 #endif
 
 
@@ -36,10 +38,13 @@ using namespace ThreadSlinger;
 #define INTERVAL 0.050000
 //#define INTERVAL 0.1
 //#define INTERVAL 1.0
-#define JITTER 0
-//#define JITTER 1
-//#define JITTER 1000
+//#define JITTER 0
+//#define JITTER 100
+#define JITTER 5000
 //#define JITTER 10000
+
+#define K_I 0.01
+#define K_P 0.1
 
 #define MIN_INTERVAL (INTERVAL - (INTERVAL * 0.1))
 #define MAX_INTERVAL (INTERVAL + (INTERVAL * 0.1))
@@ -123,15 +128,13 @@ void *osc_thread(void *arg)
 
 void *dpll_thread(void *arg)
 {
-    enum { UP, DOWN, TRI } state = TRI;
-    const char * state_names[3] = { "  UP", "DOWN", " TRI" };
+    enum { IDLE, UP, DOWN } state = IDLE;
+    const char * state_names[3] = { "IDLE", "  UP", "DOWN" };
     pxfe_timeval  start, last_ref, last_osc, now, d;
     FILE * f = fopen(LOGFILE, "w");
 
     // positive means osc is too slow, negative too fast.
     double accum_err = 0;
-    double ki = 0.01;
-    double kp = 0.1;
     double prop_adjust = 0;
     double phase_err;
 
@@ -143,85 +146,75 @@ void *dpll_thread(void *arg)
         mymsg * m = q.dequeue(-1);
         if (m)
         {
+            bool do_adj = false;
+            const char * last_s = "";
+
             now.getNow();
-
-            switch (state)
-            {
-            case UP:
-            {
-                // make OSC faster
-                d = now - last_osc;
-                phase_err = d.to_double();
-                accum_err += phase_err * ki;
-                prop_adjust = phase_err * kp;
-                osc_interval -= accum_err + prop_adjust;
-                break;
-            }
-
-            case DOWN:
-            {
-                // make OSC slower
-                d = now - last_ref;
-                phase_err = d.to_double();
-                accum_err -= phase_err * ki;
-                prop_adjust = -1 * phase_err * kp;
-                osc_interval += accum_err + prop_adjust;
-                break;
-            }
-
-            case TRI:
-                prop_adjust = 0;
-                break;
-            }
-
-            pxfe_timeval relnow = now - start;
-
-            if (f)
-            {
-                fprintf(f,
-                        "%s "
-                        "%6u.%06lu "
-                        "%7f "
-                        "%6f"
-                        "\n",
-                        state_names[state],
-                        relnow.tv_sec, relnow.tv_usec,
-                        phase_err,
-                        osc_interval
-                    );
-                fflush(f);
-            }
-
-            printf("%s "
-                   "pe %7f "
-                   "int %6f "
-                   "accum %f "
-                   "adjust %f "
-                   "\n",
-                   state_names[state],
-                   phase_err,
-                   osc_interval,
-                   accum_err,
-                   prop_adjust
-);
-
             switch (m->which)
             {
             case mymsg::REF:
                 last_ref = now;
+
                 if (state == DOWN)
-                    state = TRI;
+                {
+                    do_adj = true;
+                    last_s = "DOWN";
+                    state = IDLE;
+                }
                 else
                     state = UP;
+
                 break;
 
             case mymsg::OSC:
                 last_osc = now;
+
                 if (state == UP)
-                    state = TRI;
+                {
+                    do_adj = true;
+                    last_s = "  UP";
+                    state = IDLE;
+                }
                 else
                     state = DOWN;
+
                 break;
+            }
+
+            if (do_adj)
+            {
+                d = last_ref - last_osc;
+                phase_err = (double) (int64_t) d.usecs();
+                phase_err /= 1e6;
+                accum_err += phase_err * K_I;
+                prop_adjust = phase_err * K_P;
+                osc_interval = INTERVAL + prop_adjust + accum_err;
+
+                printf("%s "
+                       "pe %12.9f "
+                       "ac %12.9f "
+                       "pa %12.9f "
+                       "int %9.6f "
+                       "\n",
+                       last_s,
+                       phase_err,
+                       accum_err,
+                       prop_adjust,
+                       osc_interval);
+
+                fprintf(f,
+                       "%s "
+                       "pe %12.9f "
+                       "ac %12.9f "
+                       "pa %12.9f "
+                       "int %9.6f "
+                       "\n",
+                       last_s,
+                       phase_err,
+                       accum_err,
+                       prop_adjust,
+                       osc_interval);
+                fflush(f);
             }
 
             p.release(m);
