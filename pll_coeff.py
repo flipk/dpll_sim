@@ -16,7 +16,7 @@ def calculate_pll_coeffs(clock_period, loop_bandwidth, zeta):
     return k_p, k_i
 
 hz = 40
-b_l = 0.05
+b_l = 0.01
 zeta = 0.707
 
 t_s = 1 / hz
