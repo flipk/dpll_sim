@@ -1,3 +1,9 @@
-#define INTERVAL 0.025
+
+hz = 40
+b_l = 0.005
+zeta = 0.707
+
+#define JITTER 5000
+
 #define K_P 0.00033318870079053866
 #define K_I 2.2217053086057243e-07

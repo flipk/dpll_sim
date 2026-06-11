@@ -1,6 +1,7 @@
 #if 0
 set -e -x
-python pll_coeff.py > K_params.h
+python3 pll_coeff.py > K_params.h
+cat K_params.h
 g++ -O3 -I lib -o cs \
     lib/signal_backtrace.cc \
     lib/thread_slinger.cc \
@@ -10,21 +11,25 @@ exit 0
 #endif
 
 #if 0
-# no set terminal qt noraise
+# set terminal qt noraise
 
 WAYLAND_DISPLAY= gnuplot
-set terminal x11 noraise
+set terminal wxt noraise
 
 bind "q" "stop=1"
+plot 'plot.dat' using 7 title 'proportional adjustment', 'plot.dat' using 5 title 'accumulated error'
+repeat_plot = "stop = 0; while (!stop) { pause 0.2 ; replot }"
+eval repeat_plot
+
+
 reset_and_plot = "stats 'plot.dat' using 9 nooutput ; start_line = int(STATS_records - 1000) ; plot 'plot.dat' every ::start_line using 7"
 repeat_plot = "stop = 0; while (!stop) { pause 0.2 ; eval reset_and_plot }"
 eval repeat_plot
 
-plot 'plot.dat' using 7
-repeat_plot = "stop = 0; while (!stop) { pause 0.2 ; replot }"
-eval repeat_plot
-
 #endif
+
+// CONSIDER : should messages contain the timestamp, so dpll thread
+// doesn't have to measure it? that might be even more accurate.
 
 
 #include <pthread.h>
@@ -43,12 +48,13 @@ using namespace ThreadSlinger;
 #include "K_params.h"
 
 //#define JITTER 0
-#define JITTER 200
+#define JITTER 5000
 
-// sleep plus alloc plus enqueue takes a little time
-// which throws off the 'ideal' interval a little.
-// fudge this so osc_interval hovers properly near INTERVAL.
-#define OSC_FUDGE -0.000119205
+// standard deviation of jitter, given that JITTER is use
+// as a "random() % JITTER",
+// is = sqrt(J^2 / 12)
+//   or = J/(2*sqrt(3))
+//   or ~= J * 0.289.
 
 #define MIN_INTERVAL (INTERVAL - (INTERVAL * 0.1))
 #define MAX_INTERVAL (INTERVAL + (INTERVAL * 0.1))
@@ -75,6 +81,7 @@ void *clock_source_thread(void * arg)
     pxfe_timeval  now;
 
     desired.getNow();
+    // ref intervals are aligned to 1s boundaries.
     desired.tv_usec = 0;
     
     while (!done)
@@ -111,6 +118,11 @@ double osc_interval = INTERVAL;
 
 void *osc_thread(void *arg)
 {
+    pxfe_timeval  desired;
+    pxfe_timeval  now;
+
+    desired.getNow();
+
     while (1)
     {
         if (osc_interval > MAX_INTERVAL)
@@ -118,7 +130,10 @@ void *osc_thread(void *arg)
         else if (osc_interval < MIN_INTERVAL)
             osc_interval = MIN_INTERVAL;
 
-        pxfe_timeval s = osc_interval + OSC_FUDGE;
+        pxfe_timeval interval = osc_interval;
+        desired += interval;
+        now.getNow();
+        pxfe_timeval s = desired - now;
         (void) select(0, NULL, NULL, NULL, s());
         mymsg * m = p.alloc(0, false, mymsg::OSC);
         if (m)
