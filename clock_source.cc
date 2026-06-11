@@ -14,10 +14,11 @@ exit 0
 # set terminal qt noraise
 
 WAYLAND_DISPLAY= gnuplot
+set terminal x11 noraise
 set terminal wxt noraise
 
 bind "q" "stop=1"
-plot 'plot.dat' using 7 title 'proportional adjustment', 'plot.dat' using 5 title 'accumulated error'
+plot 'plot.dat' using 7 title 'proportional adjustment', 'plot.dat' using 5 title 'accumulated error' with lines
 repeat_plot = "stop = 0; while (!stop) { pause 0.2 ; replot }"
 eval repeat_plot
 
@@ -27,10 +28,6 @@ repeat_plot = "stop = 0; while (!stop) { pause 0.2 ; eval reset_and_plot }"
 eval repeat_plot
 
 #endif
-
-// CONSIDER : should messages contain the timestamp, so dpll thread
-// doesn't have to measure it? that might be even more accurate.
-
 
 #include <pthread.h>
 #include <stdio.h>
@@ -66,44 +63,31 @@ struct mymsg : public thread_slinger_message
 {
     typedef enum { NONE, REF, OSC } which_t;
     which_t which;
-    void init(which_t w) { which = w; }
+    pxfe_timeval  stamp;
+    void init(which_t _w) { which = _w; stamp.getNow(); }
     void cleanup(void) { }
 };
 
 thread_slinger_pool<mymsg, mymsg::which_t>   p;
 thread_slinger_queue<mymsg>  q;
 
-
-void *clock_source_thread(void * arg)
+void *ref_thread(void * arg)
 {
+    pxfe_timeval  ref_desired;
     pxfe_timeval  interval((double)INTERVAL);
-    pxfe_timeval  desired;
     pxfe_timeval  now;
 
-    desired.getNow();
+    ref_desired.getNow();
     // ref intervals are aligned to 1s boundaries.
-    desired.tv_usec = 0;
+    ref_desired.tv_usec = 0;
     
     while (!done)
     {
-        desired += interval;
+        ref_desired += interval;
         now.getNow();
-        pxfe_timeval s = desired - now;
+        pxfe_timeval s = ref_desired - now;
         (void) select(0, NULL, NULL, NULL, s());
-        clock_source_cond.signal();
-    }
-    return NULL;
-}
 
-void *clock_delay_thread(void *arg)
-{
-    pxfe_pthread_mutex  mutex;
-    mutex.init();
-    clock_source_cond.init();
-
-    while (1)
-    {
-        clock_source_cond.wait(mutex());
 #if JITTER > 0
         long r = random();
         usleep(r % JITTER); // introduce jitter
@@ -112,16 +96,18 @@ void *clock_delay_thread(void *arg)
         if (m)
             q.enqueue(m);
     }
+
+    return NULL;
 }
 
 double osc_interval = INTERVAL;
 
 void *osc_thread(void *arg)
 {
-    pxfe_timeval  desired;
+    pxfe_timeval  osc_desired;
     pxfe_timeval  now;
 
-    desired.getNow();
+    osc_desired.getNow();
 
     while (1)
     {
@@ -131,9 +117,9 @@ void *osc_thread(void *arg)
             osc_interval = MIN_INTERVAL;
 
         pxfe_timeval interval = osc_interval;
-        desired += interval;
+        osc_desired += interval;
         now.getNow();
-        pxfe_timeval s = desired - now;
+        pxfe_timeval s = osc_desired - now;
         (void) select(0, NULL, NULL, NULL, s());
         mymsg * m = p.alloc(0, false, mymsg::OSC);
         if (m)
@@ -147,7 +133,7 @@ void *dpll_thread(void *arg)
 {
     enum { IDLE, UP, DOWN } state = IDLE;
     const char * state_names[3] = { "IDLE", "  UP", "DOWN" };
-    pxfe_timeval  start, last_ref, last_osc, now, d;
+    pxfe_timeval  start, last_ref, last_osc, d;
     FILE * f = fopen(LOGFILE, "w");
 
     // positive means osc is too slow, negative too fast.
@@ -156,7 +142,7 @@ void *dpll_thread(void *arg)
     double phase_err;
 
     start.getNow();
-    now = last_ref = last_osc = start;
+    last_ref = last_osc = start;
 
     while (1)
     {
@@ -166,11 +152,10 @@ void *dpll_thread(void *arg)
             bool do_adj = false;
             const char * last_s = "";
 
-            now.getNow();
             switch (m->which)
             {
             case mymsg::REF:
-                last_ref = now;
+                last_ref = m->stamp;
 
                 if (state == DOWN)
                 {
@@ -184,7 +169,7 @@ void *dpll_thread(void *arg)
                 break;
 
             case mymsg::OSC:
-                last_osc = now;
+                last_osc = m->stamp;
 
                 if (state == UP)
                 {
@@ -256,8 +241,7 @@ int main()
     pxfe_pthread_attr  attr;
     std::vector<threadinfo>  threads;
 
-    threads.emplace_back(&clock_delay_thread);
-    threads.emplace_back(&clock_source_thread);
+    threads.emplace_back(&ref_thread);
     threads.emplace_back(&osc_thread);
     threads.emplace_back(&dpll_thread);
 
