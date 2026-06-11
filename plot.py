@@ -21,7 +21,7 @@ COL_2_NAME = "accum error"
 fig, ax = plt.subplots()
 line1, = ax.plot([], [],
                  marker='o',
-                 markersize=3,
+                 markersize=2,
                  linestyle='None',
                  label=COL_1_NAME)
 line2, = ax.plot([], [], label=COL_2_NAME)
@@ -31,7 +31,10 @@ ax.grid(True)
 def update_plot(frame):
     with open(DATA_FILE, 'r') as f:
         # Efficiently grabs the last MAX_LINES
-        tail_lines = deque(f, maxlen=MAX_LINES)
+        if True:
+            tail_lines = deque(f, maxlen=MAX_LINES)
+        else:
+            tail_lines = deque(f)
 
     y1_data = []
     y2_data = []
@@ -47,8 +50,15 @@ def update_plot(frame):
     line1.set_data(x_data, y1_data)
     line2.set_data(x_data, y2_data)
 
-    ax.relim()
-    ax.autoscale_view()
+    if False:
+        ax.relim()
+        ax.autoscale_view()
+    else:
+        ax.relim()
+        # Don't autoscale X margins dynamically
+        ax.autoscale_view(scalex=False, scaley=True)
+        # Force X to exactly 0 to 499
+        ax.set_xlim(0, len(y2_data))
     
     return line1, line2
 
