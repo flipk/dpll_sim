@@ -1,5 +1,6 @@
 #if 0
 set -e -x
+python pll_coeff.py > K_params.h
 g++ -O3 -I lib -o cs \
     lib/signal_backtrace.cc \
     lib/thread_slinger.cc \
@@ -15,8 +16,12 @@ WAYLAND_DISPLAY= gnuplot
 set terminal x11 noraise
 
 bind "q" "stop=1"
-reset_and_plot = "stats 'plot.dat' using 3 nooutput ; start_line = int(STATS_records - 500) ; plot 'plot.dat' every ::start_line using 3 with lines title 'phase error'"
+reset_and_plot = "stats 'plot.dat' using 9 nooutput ; start_line = int(STATS_records - 1000) ; plot 'plot.dat' every ::start_line using 7"
 repeat_plot = "stop = 0; while (!stop) { pause 0.2 ; eval reset_and_plot }"
+eval repeat_plot
+
+plot 'plot.dat' using 7
+repeat_plot = "stop = 0; while (!stop) { pause 0.2 ; replot }"
 eval repeat_plot
 
 #endif
@@ -35,16 +40,15 @@ using namespace ThreadSlinger;
 
 #define LOGFILE "plot.dat"
 
-#define INTERVAL 0.050000
-//#define INTERVAL 0.1
-//#define INTERVAL 1.0
-//#define JITTER 0
-//#define JITTER 100
-#define JITTER 5000
-//#define JITTER 10000
+#include "K_params.h"
 
-#define K_I 0.01
-#define K_P 0.1
+//#define JITTER 0
+#define JITTER 200
+
+// sleep plus alloc plus enqueue takes a little time
+// which throws off the 'ideal' interval a little.
+// fudge this so osc_interval hovers properly near INTERVAL.
+#define OSC_FUDGE -0.000119205
 
 #define MIN_INTERVAL (INTERVAL - (INTERVAL * 0.1))
 #define MAX_INTERVAL (INTERVAL + (INTERVAL * 0.1))
@@ -107,8 +111,6 @@ double osc_interval = INTERVAL;
 
 void *osc_thread(void *arg)
 {
-//    usleep(random() % 500000);
-
     while (1)
     {
         if (osc_interval > MAX_INTERVAL)
@@ -116,7 +118,7 @@ void *osc_thread(void *arg)
         else if (osc_interval < MIN_INTERVAL)
             osc_interval = MIN_INTERVAL;
 
-        pxfe_timeval s = osc_interval;
+        pxfe_timeval s = osc_interval + OSC_FUDGE;
         (void) select(0, NULL, NULL, NULL, s());
         mymsg * m = p.alloc(0, false, mymsg::OSC);
         if (m)
