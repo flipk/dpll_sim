@@ -16,12 +16,22 @@ def calculate_pll_coeffs(clock_period, loop_bandwidth, zeta):
     return k_p, k_i
 
 hz = 40
-b_l = 0.01
+b_l = 0.1
+jitter = 5000
+
 zeta = 0.707
 
 t_s = 1 / hz
-
 kp, ki = calculate_pll_coeffs(t_s, b_l, zeta)
+print(f'// hz = {hz} Hz')
+print(f'// bandwidth = {b_l} Hz')
+print('')
+print('// NOTE: this is in sec')
 print(f"#define INTERVAL {t_s}")
+print('')
+print('// NOTE: this is in usec')
+print(f"#define JITTER {jitter}")
+print('')
+print('// loop params')
 print(f"#define K_P {kp}")
 print(f"#define K_I {ki}")

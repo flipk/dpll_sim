@@ -1,7 +1,7 @@
 #if 0
 set -e -x
-python3 pll_coeff.py > K_params.h
-cat K_params.h
+python3 pll_coeff.py > Params.h
+cat Params.h
 g++ -O3 -I lib -o cs \
     lib/signal_backtrace.cc \
     lib/thread_slinger.cc \
@@ -42,10 +42,7 @@ using namespace ThreadSlinger;
 
 #define LOGFILE "plot.dat"
 
-#include "K_params.h"
-
-//#define JITTER 0
-#define JITTER 5000
+#include "Params.h"
 
 // standard deviation of jitter, given that JITTER is use
 // as a "random() % JITTER",
