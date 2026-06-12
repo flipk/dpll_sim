@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 def calculate_pll_coeffs(clock_period, loop_bandwidth, zeta):
     # Calculate natural frequency (omega_n) from loop bandwidth (B_L)
     # Note: B_L is in Hz, omega_n is in rad/s
@@ -15,14 +17,15 @@ def calculate_pll_coeffs(clock_period, loop_bandwidth, zeta):
     
     return k_p, k_i
 
-hz = 40
-b_l = 0.1
+hz = 40     / 40
+b_l = 0.01  / 40
 jitter = 5000
 
 zeta = 0.707
 
 t_s = 1 / hz
 kp, ki = calculate_pll_coeffs(t_s, b_l, zeta)
+
 print(f'// hz = {hz} Hz')
 print(f'// bandwidth = {b_l} Hz')
 print('')

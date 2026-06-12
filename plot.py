@@ -6,7 +6,7 @@ from collections import deque
 
 # --- GLOBAL CONFIGURATION ---
 DATA_FILE = "plot.dat"
-UPDATE_INTERVAL_SEC = 0.2
+UPDATE_INTERVAL_SEC = 0.45
 MAX_LINES = 1500
 
 # Column indices (0-indexed: 4 is the 5th column, 6 is the 7th)

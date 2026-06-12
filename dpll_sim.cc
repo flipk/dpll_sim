@@ -2,11 +2,11 @@
 set -e -x
 python3 pll_coeff.py > Params.h
 cat Params.h
-g++ -O3 -I lib -o cs \
+g++ -O3 -I lib -o dpll_sim \
     lib/signal_backtrace.cc \
     lib/thread_slinger.cc \
-    clock_source.cc
-sudo ./cs
+    dpll_sim.cc
+sudo ./dpll_sim
 exit 0
 #endif
 
