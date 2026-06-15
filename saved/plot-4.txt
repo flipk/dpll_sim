@@ -1,0 +1,12 @@
+// hz = 1.0 Hz
+// bandwidth = 0.00125 Hz
+
+// NOTE: this is in sec
+#define INTERVAL 1.0
+
+// NOTE: this is in usec
+#define JITTER 5000
+
+// loop params
+#define K_P 0.0033219073437368582
+#define K_I 2.2150508593975982e-05
