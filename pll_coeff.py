@@ -17,17 +17,29 @@ def calculate_pll_coeffs(clock_period, loop_bandwidth, zeta):
     
     return k_p, k_i
 
-hz = 40
-b_l = 0.01
+hz = 50
 jitter = 5000
 
-zeta = 0.707
+lock_thresh = 0.008
+lock_thresh_count = 100
+
+# unlocked (fastlock mode)
+b_l_u = 0.2
+zeta_u = 0.707
+# locked (maintenance mode)
+b_l_l = 0.005
+zeta_l = 0.707
+
 
 t_s = 1 / hz
-kp, ki = calculate_pll_coeffs(t_s, b_l, zeta)
+kp_u, ki_u = calculate_pll_coeffs(t_s, b_l_u, zeta_u)
+kp_l, ki_l = calculate_pll_coeffs(t_s, b_l_l, zeta_l)
 
 print(f'// hz = {hz} Hz')
-print(f'// bandwidth = {b_l} Hz')
+print(f'// bandwidth_u = {b_l_u} Hz')
+print(f'// zeta_u = {zeta_u}')
+print(f'// bandwidth_l = {b_l_l} Hz')
+print(f'// zeta_l = {zeta_l}')
 print('')
 print('// NOTE: this is in sec')
 print(f"#define INTERVAL {t_s}")
@@ -36,5 +48,10 @@ print('// NOTE: this is in usec')
 print(f"#define JITTER {jitter}")
 print('')
 print('// loop params')
-print(f"#define K_P {kp}")
-print(f"#define K_I {ki}")
+print(f"#define K_P_U {kp_u}")
+print(f"#define K_I_U {ki_u}")
+print(f"#define K_P_L {kp_l}")
+print(f"#define K_I_L {ki_l}")
+print('')
+print(f'#define LOCK_THRESH {lock_thresh}')
+print(f'#define LOCK_THRESH_COUNT {lock_thresh_count}')

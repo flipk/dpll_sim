@@ -35,8 +35,11 @@ eval repeat_plot
 #include <stdlib.h>
 #include <sys/select.h>
 #include <vector>
+#include <math.h>
+
 #include "posix_fe.h"
 #include "thread_slinger.h"
+#include "stddev.h"
 
 using namespace ThreadSlinger;
 
@@ -106,7 +109,7 @@ void *osc_thread(void *arg)
 
     osc_desired.getNow();
 
-    while (1)
+    while (!done)
     {
         if (osc_interval > MAX_INTERVAL)
             osc_interval = MAX_INTERVAL;
@@ -123,7 +126,7 @@ void *osc_thread(void *arg)
             q.enqueue(m);
     }
 
-    return 0;
+    return NULL;
 }
 
 void *dpll_thread(void *arg)
@@ -138,12 +141,17 @@ void *dpll_thread(void *arg)
     double prop_adjust = 0;
     double phase_err;
 
+    int lock_count = 0;
+    bool locked = false;
+    double sd_history[LOCK_THRESH_COUNT];
+    int sd_pos = 0;
+
     start.getNow();
     last_ref = last_osc = start;
 
-    while (1)
+    while (!done)
     {
-        mymsg * m = q.dequeue(-1);
+        mymsg * m = q.dequeue(1000);
         if (m)
         {
             bool do_adj = false;
@@ -185,40 +193,77 @@ void *dpll_thread(void *arg)
                 d = last_ref - last_osc;
                 phase_err = (double) (int64_t) d.usecs();
                 phase_err /= 1e6;
-                accum_err += phase_err * K_I;
-                prop_adjust = phase_err * K_P;
-                osc_interval = INTERVAL + prop_adjust + accum_err;
+                if (locked)
+                {
+                    accum_err += phase_err * K_I_L;
+                    prop_adjust = phase_err * K_P_L;
+                }
+                else
+                {
+                    accum_err += phase_err * K_I_U;
+                    prop_adjust = phase_err * K_P_U;
+                }
+                double adjust = prop_adjust + accum_err;
+                osc_interval = INTERVAL + adjust;
+
+                double metric = fabs(accum_err / K_I_U);
+
+                if (metric < LOCK_THRESH)
+                {
+                    if (++lock_count >= LOCK_THRESH_COUNT)
+                        locked = true;
+                }
+                else
+                {
+                    lock_count = 0;
+                    locked = false;
+                }
+
+                sd_history[sd_pos] = adjust;
+                if (++sd_pos >= LOCK_THRESH_COUNT)
+                    sd_pos = 0;
+                double sd = calc_stddev(sd_history, LOCK_THRESH_COUNT);
 
                 printf("%s "
-                       "pe %12.9f "
-                       "ac %12.9f "
-                       "pa %12.9f "
-                       "int %9.6f "
-                       "\n",
+                       "pe %9.6f "
+                       "ae %12.9f "
+                       "ad %12.9f "
+                       "sd %8.2e "
+                       "int %8.6f "
+                       "m %8.6f "
+                       "%s\n",
                        last_s,
                        phase_err,
                        accum_err,
-                       prop_adjust,
-                       osc_interval);
+                       adjust,
+                       sd,
+                       osc_interval,
+                       metric,
+                       locked ? "L" : "U"
+                    );
 
                 fprintf(f,
                        "%s "
                        "pe %12.9f "
-                       "ac %12.9f "
-                       "pa %12.9f "
+                       "ae %12.9f "
+                       "ad %12.9f "
                        "int %9.6f "
+                       "%12.6f "
                        "\n",
                        last_s,
                        phase_err,
                        accum_err,
-                       prop_adjust,
-                       osc_interval);
+                       adjust,
+                       osc_interval,
+                       metric
+                    );
                 fflush(f);
             }
 
             p.release(m);
         }
     }
+    return NULL;
 }
 
 struct threadinfo
@@ -261,6 +306,12 @@ int main()
         usleep(100);
     }
 
-    pthread_join(threads[1].id, NULL);
+    char c;
+    read(0, &c, 1);
+    done = true;
+
+    for (auto &ti : threads)
+        pthread_join(ti.id, NULL);
+
     return 0;
 }
