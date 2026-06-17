@@ -29,12 +29,17 @@ ax.legend(loc='upper right')
 ax.grid(True)
 
 def update_plot(frame):
-    with open(DATA_FILE, 'r') as f:
-        # Efficiently grabs the last MAX_LINES
-        if True:
-            tail_lines = deque(f, maxlen=MAX_LINES)
-        else:
-            tail_lines = deque(f)
+    try:
+        with open(DATA_FILE, 'r') as f:
+            # Efficiently grabs the last MAX_LINES
+            if True:
+                tail_lines = deque(f, maxlen=MAX_LINES)
+            else:
+                tail_lines = deque(f)
+    except:
+        # since we're using blit=False, we can just return
+        # None until the file actually works.
+        return None, None
 
     y1_data = []
     y2_data = []

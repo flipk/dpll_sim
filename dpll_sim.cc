@@ -2,11 +2,12 @@
 set -e -x
 python3 pll_coeff.py > Params.h
 cat Params.h
-g++ -O3 -I lib -o dpll_sim \
+g++ -O3 -Wall -I lib -o dpll_sim \
     lib/signal_backtrace.cc \
     lib/thread_slinger.cc \
     dpll_sim.cc
 sudo ./dpll_sim
+rm -f dpll_sim
 exit 0
 #endif
 
@@ -29,6 +30,9 @@ eval repeat_plot
 
 #endif
 
+// silence compiler.
+#define SILENCE(x)   if (x < 0) { /* nothing */ }
+
 #include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -36,6 +40,7 @@ eval repeat_plot
 #include <sys/select.h>
 #include <vector>
 #include <math.h>
+#include <syscall.h>
 
 #include "posix_fe.h"
 #include "thread_slinger.h"
@@ -71,11 +76,25 @@ struct mymsg : public thread_slinger_message
 thread_slinger_pool<mymsg, mymsg::which_t>   p;
 thread_slinger_queue<mymsg>  q;
 
+// note "setuid" is global for the whole process and all its threads
+// (setxid triage!). this makes it more difficult for main to hold
+// onto it while creating threads (so we can set realtime prios) and
+// then give up before creating log files, so we use
+// syscall(SYS_getuid) instead.
+// each thread gives up priviledges in its own time.
+static void give_up_privs(void)
+{
+    syscall(SYS_setuid, UNPRIV_UID);
+    syscall(SYS_setgid, UNPRIV_GID);
+}
+
 void *ref_thread(void * arg)
 {
     pxfe_timeval  ref_desired;
     pxfe_timeval  interval((double)INTERVAL);
     pxfe_timeval  now;
+
+    give_up_privs();
 
     ref_desired.getNow();
     // ref intervals are aligned to 1s boundaries.
@@ -107,6 +126,8 @@ void *osc_thread(void *arg)
     pxfe_timeval  osc_desired;
     pxfe_timeval  now;
 
+    give_up_privs();
+
     osc_desired.getNow();
 
     while (!done)
@@ -132,9 +153,13 @@ void *osc_thread(void *arg)
 void *dpll_thread(void *arg)
 {
     enum { IDLE, UP, DOWN } state = IDLE;
-    const char * state_names[3] = { "IDLE", "  UP", "DOWN" };
     pxfe_timeval  start, last_ref, last_osc, d;
-    FILE * f = fopen(LOGFILE, "w");
+    FILE * f = NULL;
+
+    // give up priviledges before opening data file.
+    give_up_privs();
+
+    f = fopen(LOGFILE, "w");
 
     // positive means osc is too slow, negative too fast.
     double accum_err = 0;
@@ -144,7 +169,7 @@ void *dpll_thread(void *arg)
     int lock_count = 0;
     bool locked = false;
     double sd_history[LOCK_THRESH_COUNT];
-    int sd_pos = 0;
+    int sd_pos = 0, sd_got = 0;
 
     start.getNow();
     last_ref = last_osc = start;
@@ -186,6 +211,10 @@ void *dpll_thread(void *arg)
                     state = DOWN;
 
                 break;
+
+            case mymsg::NONE:
+                // silence compiler warning.
+                break;
             }
 
             if (do_adj)
@@ -222,7 +251,15 @@ void *dpll_thread(void *arg)
                 sd_history[sd_pos] = adjust;
                 if (++sd_pos >= LOCK_THRESH_COUNT)
                     sd_pos = 0;
-                double sd = calc_stddev(sd_history, LOCK_THRESH_COUNT);
+                double sd;
+                if (sd_got < LOCK_THRESH_COUNT)
+                {
+                    // don't calculate stddev until the data set is full
+                    sd_got ++;
+                    sd = 1e-20;
+                }
+                else
+                    sd = calc_stddev(sd_history, LOCK_THRESH_COUNT);
 
                 printf("%s "
                        "pe %9.6f "
@@ -289,9 +326,18 @@ int main()
 
     p.add(100);
 
-    attr.setinheritsched(false);
-    attr.setfifoprio(1);
-//    attr.setrrprio(1);
+    if (getuid() == 0)
+    {
+        // as root, we're allowed to do these things.
+        // as nonroot, we are not.
+        attr.setinheritsched(false);
+        attr.setfifoprio(1);
+//      attr.setrrprio(1);
+    }
+    else
+    {
+        printf("INFO: not setting thread prios, no root access\n");
+    }
 
     for (auto &ti : threads)
     {
@@ -307,7 +353,7 @@ int main()
     }
 
     char c;
-    read(0, &c, 1);
+    SILENCE(read(0, &c, 1));
     done = true;
 
     for (auto &ti : threads)
