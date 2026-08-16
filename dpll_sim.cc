@@ -167,7 +167,7 @@ void *dpll_thread(void *arg)
     double phase_err;
 
     int lock_count = 0;
-    bool locked = false;
+    int stage = 1;
     double sd_history[LOCK_THRESH_COUNT];
     int sd_pos = 0, sd_got = 0;
 
@@ -222,30 +222,44 @@ void *dpll_thread(void *arg)
                 d = last_ref - last_osc;
                 phase_err = (double) (int64_t) d.usecs();
                 phase_err /= 1e6;
-                if (locked)
+
+                switch (stage)
                 {
-                    accum_err += phase_err * K_I_L;
-                    prop_adjust = phase_err * K_P_L;
+                case 1:
+                    accum_err  += phase_err * K_I_1;
+                    prop_adjust = phase_err * K_P_1;
+                    break;
+
+                case 2:
+                    accum_err  += phase_err * K_I_2;
+                    prop_adjust = phase_err * K_P_2;
+                    break;
+
+                case 3:
+                    accum_err  += phase_err * K_I_3;
+                    prop_adjust = phase_err * K_P_3;
+                    break;
                 }
-                else
-                {
-                    accum_err += phase_err * K_I_U;
-                    prop_adjust = phase_err * K_P_U;
-                }
+
                 double adjust = prop_adjust + accum_err;
                 osc_interval = INTERVAL + adjust;
 
-                double metric = fabs(accum_err / K_I_U);
+                double metric = fabs(accum_err / K_I_1);
 
-                if (metric < LOCK_THRESH)
+                if (metric < LOCK_THRESH_23)
                 {
                     if (++lock_count >= LOCK_THRESH_COUNT)
-                        locked = true;
+                        stage = 3;
+                }
+                else if (metric < LOCK_THRESH_12)
+                {
+                    if (++lock_count >= LOCK_THRESH_COUNT)
+                        stage = 2;
                 }
                 else
                 {
                     lock_count = 0;
-                    locked = false;
+                    stage = 1;
                 }
 
                 sd_history[sd_pos] = adjust;
@@ -268,7 +282,7 @@ void *dpll_thread(void *arg)
                        "sd %8.2e "
                        "int %8.6f "
                        "m %8.6f "
-                       "%s\n",
+                       "stg %d\n",
                        last_s,
                        phase_err,
                        accum_err,
@@ -276,7 +290,7 @@ void *dpll_thread(void *arg)
                        sd,
                        osc_interval,
                        metric,
-                       locked ? "L" : "U"
+                       stage
                     );
 
                 fprintf(f,
