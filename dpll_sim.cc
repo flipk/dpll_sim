@@ -167,8 +167,10 @@ void *dpll_thread(void *arg)
     double phase_err;
 
     int lock_count = 0;
+    int unlock_count = 0;
     int stage = 0;
-    double sd_history[LOCK_THRESH_COUNT];
+#define SD_HISTORY_SIZE 100
+    double sd_history[SD_HISTORY_SIZE];
     int sd_pos = 0, sd_got = 0;
 
     start.getNow();
@@ -244,8 +246,9 @@ void *dpll_thread(void *arg)
                 if (metric < sp->lock_thresh)
                 {
                     metric_color = color_green;
+                    unlock_count = 0;
                     lock_count ++;
-                    if (lock_count >= LOCK_THRESH_COUNT)
+                    if (lock_count >= sp->lock_thresh_count)
                     {
                         if (stage < (NUM_STAGES-1))
                         {
@@ -256,22 +259,31 @@ void *dpll_thread(void *arg)
                 }
                 else
                 {
-                    lock_count = 0;
                     metric_color = color_red;
+                    lock_count = 0;
+                    unlock_count ++;
+                    if (unlock_count >= sp->unlock_thresh_count)
+                    {
+                        if (stage > 0)
+                        {
+                            stage --;
+                            unlock_count = 0;
+                        }
+                    }
                 }
 
                 sd_history[sd_pos] = adjust;
-                if (++sd_pos >= LOCK_THRESH_COUNT)
+                if (++sd_pos >= SD_HISTORY_SIZE)
                     sd_pos = 0;
                 double sd;
-                if (sd_got < LOCK_THRESH_COUNT)
+                if (sd_got < SD_HISTORY_SIZE)
                 {
                     // don't calculate stddev until the data set is full
                     sd_got ++;
                     sd = 1e-20;
                 }
                 else
-                    sd = calc_stddev(sd_history, LOCK_THRESH_COUNT);
+                    sd = calc_stddev(sd_history, SD_HISTORY_SIZE);
 
 
 #define PRINTARGS                                       \
@@ -282,7 +294,7 @@ void *dpll_thread(void *arg)
                     "sd %13.10f "                       \
                     "int %8.6f "                        \
                     "m %s%8.6f%s "                      \
-                    "S%d lc %d\n",                      \
+                    "lc %d uc %d S%d\n",                \
                     last_s,                             \
                     phase_err,                          \
                     accum_err,                          \
@@ -290,7 +302,7 @@ void *dpll_thread(void *arg)
                     sd,                                 \
                     osc_interval,                       \
                     metric_color, metric, color_norm,   \
-                    stage, lock_count
+                    lock_count, unlock_count, stage
 
                 printf(PRINTARGS);
 
