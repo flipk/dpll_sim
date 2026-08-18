@@ -167,7 +167,7 @@ void *dpll_thread(void *arg)
     double phase_err;
 
     int lock_count = 0;
-    int stage = 1;
+    int stage = 0;
     double sd_history[LOCK_THRESH_COUNT];
     int sd_pos = 0, sd_got = 0;
 
@@ -223,43 +223,41 @@ void *dpll_thread(void *arg)
                 phase_err = (double) (int64_t) d.usecs();
                 phase_err /= 1e6;
 
-                switch (stage)
-                {
-                case 1:
-                    accum_err  += phase_err * K_I_1;
-                    prop_adjust = phase_err * K_P_1;
-                    break;
+                StageParams * sp = &stage_params[stage];
 
-                case 2:
-                    accum_err  += phase_err * K_I_2;
-                    prop_adjust = phase_err * K_P_2;
-                    break;
-
-                case 3:
-                    accum_err  += phase_err * K_I_3;
-                    prop_adjust = phase_err * K_P_3;
-                    break;
-                }
+                accum_err  += phase_err * sp->k_i;
+                prop_adjust = phase_err * sp->k_p;
 
                 double adjust = prop_adjust + accum_err;
                 osc_interval = INTERVAL + adjust;
 
-                double metric = fabs(accum_err / K_I_1);
+                // always use the first k_i for the metric so
+                // the metric doesn't strangely resize.
+                double metric = fabs(accum_err / sp->k_i);
 
-                if (metric < LOCK_THRESH_23)
+                const char * metric_color = "";
+                const char * color_red   = "[31;1m";
+                const char * color_green = "[32;1m";
+                const char * color_norm  = "[m";
+
+
+                if (metric < sp->lock_thresh)
                 {
-                    if (++lock_count >= LOCK_THRESH_COUNT)
-                        stage = 3;
-                }
-                else if (metric < LOCK_THRESH_12)
-                {
-                    if (++lock_count >= LOCK_THRESH_COUNT)
-                        stage = 2;
+                    metric_color = color_green;
+                    lock_count ++;
+                    if (lock_count >= LOCK_THRESH_COUNT)
+                    {
+                        if (stage < (NUM_STAGES-1))
+                        {
+                            stage ++;
+                            lock_count = 0;
+                        }
+                    }
                 }
                 else
                 {
                     lock_count = 0;
-                    stage = 1;
+                    metric_color = color_red;
                 }
 
                 sd_history[sd_pos] = adjust;
@@ -275,39 +273,28 @@ void *dpll_thread(void *arg)
                 else
                     sd = calc_stddev(sd_history, LOCK_THRESH_COUNT);
 
-                printf("%s "
-                       "pe %9.6f "
-                       "ae %12.9f "
-                       "ad %12.9f "
-                       "sd %8.2e "
-                       "int %8.6f "
-                       "m %8.6f "
-                       "stg %d\n",
-                       last_s,
-                       phase_err,
-                       accum_err,
-                       adjust,
-                       sd,
-                       osc_interval,
-                       metric,
-                       stage
-                    );
 
-                fprintf(f,
-                       "%s "
-                       "pe %12.9f "
-                       "ae %12.9f "
-                       "ad %12.9f "
-                       "int %9.6f "
-                       "%12.6f "
-                       "\n",
-                       last_s,
-                       phase_err,
-                       accum_err,
-                       adjust,
-                       osc_interval,
-                       metric
-                    );
+#define PRINTARGS                                       \
+                    "%s "                               \
+                    "pe %9.6f "                         \
+                    "ae %13.10f "                       \
+                    "ad %13.10f "                       \
+                    "sd %13.10f "                       \
+                    "int %8.6f "                        \
+                    "m %s%8.6f%s "                      \
+                    "S%d lc %d\n",                      \
+                    last_s,                             \
+                    phase_err,                          \
+                    accum_err,                          \
+                    adjust,                             \
+                    sd,                                 \
+                    osc_interval,                       \
+                    metric_color, metric, color_norm,   \
+                    stage, lock_count
+
+                printf(PRINTARGS);
+
+                fprintf(f, PRINTARGS);
                 fflush(f);
             }
 

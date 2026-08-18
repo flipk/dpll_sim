@@ -9,9 +9,9 @@ DATA_FILE = "plot.dat"
 UPDATE_INTERVAL_SEC = 0.45
 MAX_LINES = 1500
 
-# Column indices (0-indexed: 4 is the 5th column, 6 is the 7th)
-COL_1_IDX = 6
-COL_2_IDX = 4
+# Column indices (0-indexed)
+COL_1_IDX = 6  # 'adjust'
+COL_2_IDX = 4  # 'accum error'
 
 # Plot labels
 COL_1_NAME = "adjustments"
