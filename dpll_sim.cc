@@ -233,21 +233,43 @@ void *dpll_thread(void *arg)
                 double adjust = prop_adjust + accum_err;
                 osc_interval = INTERVAL + adjust;
 
-                // always use the first k_i for the metric so
-                // the metric doesn't strangely resize.
-                double metric = fabs(accum_err / sp->k_i);
+                sd_history[sd_pos] = adjust;
+                if (++sd_pos >= SD_HISTORY_SIZE)
+                    sd_pos = 0;
+                if (sd_got < SD_HISTORY_SIZE)
+                    sd_got ++;
 
-                const char * metric_color = "";
-                const char * color_red   = "[31;1m";
-                const char * color_green = "[32;1m";
-                const char * color_norm  = "[m";
+                double sd = calc_stddev(sd_history, sd_got);
+
+                const char * sd_color = "";
+                const char * ae_color = "";
+                const char * norm = "";
+                static const char * color_red   = "[31;1m";
+                static const char * color_green = "[32;1m";
+                static const char * color_norm  = "[m";
 
 
-                if (metric < sp->lock_thresh)
+                int good_count = 0;
+
+                if (fabs(accum_err) < sp->accum_error_thresh)
                 {
-                    metric_color = color_green;
+                    ae_color = color_green;
+                    good_count ++;
+                }
+                else
+                    ae_color = color_red;
+
+                if (sd < sp->lock_thresh)
+                {
+                    sd_color = color_green;
+                    good_count ++;
+                }
+                else
+                    sd_color = color_red;
+
+                if (good_count == 2)
+                {
                     unlock_count = 0;
-                    lock_count ++;
                     if (lock_count >= sp->lock_thresh_count)
                     {
                         if (stage < (NUM_STAGES-1))
@@ -256,10 +278,12 @@ void *dpll_thread(void *arg)
                             lock_count = 0;
                         }
                     }
+                    else
+                        lock_count ++;
+
                 }
                 else
                 {
-                    metric_color = color_red;
                     lock_count = 0;
                     unlock_count ++;
                     if (unlock_count >= sp->unlock_thresh_count)
@@ -272,40 +296,26 @@ void *dpll_thread(void *arg)
                     }
                 }
 
-                sd_history[sd_pos] = adjust;
-                if (++sd_pos >= SD_HISTORY_SIZE)
-                    sd_pos = 0;
-                double sd;
-                if (sd_got < SD_HISTORY_SIZE)
-                {
-                    // don't calculate stddev until the data set is full
-                    sd_got ++;
-                    sd = 1e-20;
-                }
-                else
-                    sd = calc_stddev(sd_history, SD_HISTORY_SIZE);
 
 
 #define PRINTARGS                                       \
                     "%s "                               \
                     "pe %9.6f "                         \
-                    "ae %13.10f "                       \
+                    "ae %s%13.10f%s "                   \
                     "ad %13.10f "                       \
-                    "sd %13.10f "                       \
-                    "int %8.6f "                        \
-                    "m %s%8.6f%s "                      \
-                    "lc %d uc %d S%d\n",                \
+                    "sd %s%13.10f%s "                   \
+                    "lc %03d uc %03d S%d\n",            \
                     last_s,                             \
                     phase_err,                          \
-                    accum_err,                          \
+                    ae_color, accum_err, norm,          \
                     adjust,                             \
-                    sd,                                 \
-                    osc_interval,                       \
-                    metric_color, metric, color_norm,   \
+                    sd_color, sd, norm,                 \
                     lock_count, unlock_count, stage
 
+                norm = color_norm;
                 printf(PRINTARGS);
 
+                sd_color = ae_color = norm = "";
                 fprintf(f, PRINTARGS);
                 fflush(f);
             }
