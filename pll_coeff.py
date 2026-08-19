@@ -73,11 +73,11 @@ print('struct StageParams {\n'
 
 stage = 0
 for p in params:
-    print(f'   // stage {stage+1} bw = {p.loop_bandwidth} zeta = {p.zeta}\n'
-          '   {\n'
-          f'      {p.k_p:12e}, {p.k_i:12e}, '
+    print(f'   // stage {stage} bw = {p.loop_bandwidth} zeta = {p.zeta}\n'
+          '   { '
+          f'{p.k_p:12e}, {p.k_i:12e}, '
           f'{p.accum_error_thresh}, {p.lock_thresh}, '
-          f'{p.lock_count}, {p.unlock_count} \n'
+          f'{p.lock_count}, {p.unlock_count} '
           '},')
     stage += 1
 

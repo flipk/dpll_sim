@@ -25,13 +25,14 @@ ax2 = ax.twinx()
 line1, = ax.plot([], [],
                  marker='o',
                  markersize=2,
-                 linestyle='None',
-                 label=COL_1_NAME)
-line2, = ax.plot([], [], label=COL_2_NAME)
-line3, = ax2.plot([], [], label=COL_3_NAME)
+                 linestyle='None')
+line2, = ax.plot([], [])
+line3, = ax2.plot([], [])
 
-ax.legend(loc='upper right')
-ax2.legend(loc='upper left')
+lines = [line1, line2, line3]
+labels = [COL_1_NAME, COL_2_NAME, COL_3_NAME]
+ax.legend(lines, labels, loc='upper right')
+
 ax.grid(True)
 ax2.grid(True)
 
@@ -90,25 +91,3 @@ if __name__ == "__main__":
 
 
 exit(0)
-
-
-# consider the below if i want to change the grid
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from matplotlib.ticker import MultipleLocator  # <-- ADD THIS IMPORT
-from collections import deque
-
-# ... keep your existing globals ...
-
-fig, ax = plt.subplots()
-line1, = ax.plot([], [], lw=1, label=COL_1_NAME)
-line2, = ax.plot([], [], marker='o', linestyle='None', ms=3, label=COL_2_NAME)
-ax.legend(loc='upper right')
-
-# 1. Turn on the grid
-ax.grid(True)
-
-# 2. Control the spacing
-# This forces an X grid line every 50 units, and a Y grid line every 10 units
-ax.xaxis.set_major_locator(MultipleLocator(50))
-ax.yaxis.set_major_locator(MultipleLocator(10))
