@@ -12,6 +12,59 @@ exit 0
 #endif
 
 #if 0
+
+// Standard deviation assumes noise is white and Gaussian. Clock
+// wander and scheduling delays often present as random walk or
+// flicker noise, which standard deviation fails to accurately
+// characterize over time.
+
+// Allan Variance: Instead of tracking the standard deviation of
+// proportional adjustments, track the overlapping Allan Variance (or
+// Time Deviation). This metric is designed specifically for clock
+// synchronization because it differentiates between high-frequency
+// jitter (scheduling delays) and low-frequency drift (actual
+// oscillator error). The phase data equation is:
+
+// $$\sigma_x^2(\tau) = \frac{1}{2(N-2)\tau^2} \sum_{i=1}^{N-2} (x_{i+2} - 2x_{i+1} + x_i)^2$$
+
+// Outlier Rejection (Median Filtering): Because WSL injects massive,
+// intermittent latency spikes, feeding these directly into the PI
+// controller destabilizes the loop. Implement a sliding window median
+// filter on the raw phase_err before it reaches the controller.
+
+// Continuous Gain Scheduling: Calculate an instantaneous noise
+// envelope and use it to dynamically scale your loop bandwidth
+// ($\omega_n$).
+
+// Error-Driven Scaling: When the phase error derivative (change in
+// error) is small but the absolute error is high, the loop can widen
+// its bandwidth. When the noise floor increases (like in WSL), the
+// loop can automatically narrow to filter it out.
+
+// Sliding window to calculate noise floor
+double noise_envelope = calculate_variance(sd_history, sd_got);
+
+// Dynamically scale parameters based on the current noise floor rather than stages
+// Base Kp and Ki would be your tightest desired bandwidth (e.g., your Stage 5)
+double adaptive_multiplier = 1.0; 
+
+if (noise_envelope > BASE_NOISE_FLOOR) {
+    // Widen bandwidth linearly or logarithmically as noise/error increases
+    adaptive_multiplier = (noise_envelope / BASE_NOISE_FLOOR); 
+}
+
+// Cap the multiplier to prevent instability
+if (adaptive_multiplier > MAX_MULTIPLIER) adaptive_multiplier = MAX_MULTIPLIER;
+
+double current_kp = BASE_KP * adaptive_multiplier;
+double current_ki = BASE_KI * adaptive_multiplier;
+
+accum_err  += phase_err * current_ki;
+prop_adjust = phase_err * current_kp;
+
+#endif
+
+#if 0
 # set terminal qt noraise
 
 WAYLAND_DISPLAY= gnuplot
