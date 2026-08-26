@@ -93,6 +93,7 @@ struct pxfe_timeval : public timeval
     }
     /** set method which accepts sec and usec args */
     void set(time_t s, long u) { tv_sec = s; tv_usec = u; }
+    /** set method which accepts double */
     void set(double s) {
         double integ;
         double frac = modf(s, &integ);
@@ -238,12 +239,21 @@ struct pxfe_timespec : public timespec
     pxfe_timespec(void) { tv_sec = 0; tv_nsec = 0; }
     /** constructor which accepts sec and nsec args */
     pxfe_timespec(time_t s, long n) { set(s,n); }
+    /** constructor which accepts double sec */
+    pxfe_timespec(double s) { set(s); }
     /** copy constructor  */
     pxfe_timespec(const pxfe_timespec &other) {
         tv_sec = other.tv_sec; tv_nsec = other.tv_nsec;
     }
     /** set method which accepts sec and nsec args */
     void set(time_t s, long n) { tv_sec = s; tv_nsec = n; }
+    /** set method which accepts double */
+    void set(double s) {
+        double integ;
+        double frac = modf(s, &integ);
+        tv_sec = (time_t) integ;
+        tv_nsec = (frac * 1e9 + 0.5);
+    }
     /** assignment operator from another timespec */
     const pxfe_timespec &operator=(const timespec &rhs) {
         tv_sec = rhs.tv_sec;

@@ -68,7 +68,7 @@ struct mymsg : public thread_slinger_message
 {
     typedef enum { NONE, REF, OSC } which_t;
     which_t which;
-    pxfe_timeval  stamp;
+    pxfe_timespec  stamp;
     void init(which_t _w) { which = _w; stamp.getNow(); }
     void cleanup(void) { }
 };
@@ -90,22 +90,25 @@ static void give_up_privs(void)
 
 void *ref_thread(void * arg)
 {
-    pxfe_timeval  ref_desired;
-    pxfe_timeval  interval((double)INTERVAL);
-    pxfe_timeval  now;
+    pxfe_timespec  ref_desired;
+    pxfe_timespec  interval((double)INTERVAL);
+    pxfe_timespec  now;
 
     give_up_privs();
 
     ref_desired.getNow();
     // ref intervals are aligned to 1s boundaries.
-    ref_desired.tv_usec = 0;
+    ref_desired.tv_nsec = 0;
     
     while (!done)
     {
         ref_desired += interval;
         now.getNow();
-        pxfe_timeval s = ref_desired - now;
-        (void) select(0, NULL, NULL, NULL, s());
+        pxfe_timespec s = ref_desired - now;
+        clock_nanosleep(CLOCK_MONOTONIC,
+                        /*flags*/ 0,
+                        s(),
+                        NULL);
 
 #if JITTER > 0
         long r = random();
@@ -123,8 +126,8 @@ double osc_interval = INTERVAL;
 
 void *osc_thread(void *arg)
 {
-    pxfe_timeval  osc_desired;
-    pxfe_timeval  now;
+    pxfe_timespec  osc_desired;
+    pxfe_timespec  now;
 
     give_up_privs();
 
@@ -137,11 +140,16 @@ void *osc_thread(void *arg)
         else if (osc_interval < MIN_INTERVAL)
             osc_interval = MIN_INTERVAL;
 
-        pxfe_timeval interval = osc_interval;
+        pxfe_timespec interval = osc_interval;
         osc_desired += interval;
         now.getNow();
-        pxfe_timeval s = osc_desired - now;
-        (void) select(0, NULL, NULL, NULL, s());
+        pxfe_timespec s = osc_desired - now;
+
+        clock_nanosleep(CLOCK_MONOTONIC,
+                        /*flags*/ 0,
+                        s(),
+                        NULL);
+
         mymsg * m = p.alloc(0, false, mymsg::OSC);
         if (m)
             q.enqueue(m);
@@ -153,7 +161,7 @@ void *osc_thread(void *arg)
 void *dpll_thread(void *arg)
 {
     enum { IDLE, UP, DOWN } state = IDLE;
-    pxfe_timeval  start, last_ref, last_osc, d;
+    pxfe_timespec  start, last_ref, last_osc, d;
     FILE * f = NULL;
 
     // give up priviledges before opening data file.
