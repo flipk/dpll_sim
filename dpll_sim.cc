@@ -11,6 +11,11 @@ rm -f dpll_sim
 exit 0
 #endif
 
+
+// IDEA : if ae does a zero-crossing while in the green/green state,
+//   transition to next stage then.
+
+
 #if 0
 # set terminal qt noraise
 
@@ -69,7 +74,7 @@ struct mymsg : public thread_slinger_message
     typedef enum { NONE, REF, OSC } which_t;
     which_t which;
     pxfe_timespec  stamp;
-    void init(which_t _w) { which = _w; stamp.getNow(); }
+    void init(which_t _w) { which = _w; }
     void cleanup(void) { }
 };
 
@@ -98,7 +103,7 @@ void *ref_thread(void * arg)
     give_up_privs();
 
     early_alarm.set(0, 10000);
-    ref_desired.getNow();
+    ref_desired.getNow(CLOCK_MONOTONIC);
     // ref intervals are aligned to 1s boundaries.
     ref_desired.tv_nsec = 0;
     
@@ -115,7 +120,7 @@ void *ref_thread(void * arg)
 
         pxfe_timespec early_target = ref_desired - early_alarm;
 
-        now.getNow();
+        now.getNow(CLOCK_MONOTONIC);
         pxfe_timespec s = early_target - now;
 
         // go to sleep, but wake up early, in case traffic is bad.
@@ -124,7 +129,7 @@ void *ref_thread(void * arg)
         // now that we're in the lobby way early, surf the web and
         // kill time until the exact time of the appointment.
         do {
-            now.getNow();
+            now.getNow(CLOCK_MONOTONIC);
         } while (now < ref_desired);
 
 #if JITTER > 0
@@ -132,6 +137,7 @@ void *ref_thread(void * arg)
         usleep(r % JITTER); // introduce jitter
 #endif
 
+        m->stamp = now;
         q.enqueue(m);
     }
 
@@ -149,7 +155,7 @@ void *osc_thread(void *arg)
     give_up_privs();
 
     early_alarm.set(0, 10000);
-    osc_desired.getNow();
+    osc_desired.getNow(CLOCK_MONOTONIC);
 
     while (!done)
     {
@@ -170,7 +176,7 @@ void *osc_thread(void *arg)
 
         pxfe_timespec early_target = osc_desired - early_alarm;
 
-        now.getNow();
+        now.getNow(CLOCK_MONOTONIC);
         pxfe_timespec s = early_target - now;
 
         // go to sleep, but wake up early, in case traffic is bad.
@@ -179,9 +185,10 @@ void *osc_thread(void *arg)
         // now that we're in the lobby way early, surf the web and
         // kill time until the exact time of the appointment.
         do {
-            now.getNow();
+            now.getNow(CLOCK_MONOTONIC);
         } while (now < osc_desired);
 
+        m->stamp = now;
         q.enqueue(m);
     }
 
@@ -210,7 +217,7 @@ void *dpll_thread(void *arg)
 
     stats_history<double, 100>  adjust_history;
 
-    start.getNow();
+    start.getNow(CLOCK_MONOTONIC);
     last_ref = last_osc = start;
 
     while (!done)
