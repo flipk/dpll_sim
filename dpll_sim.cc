@@ -93,30 +93,46 @@ void *ref_thread(void * arg)
     pxfe_timespec  ref_desired;
     pxfe_timespec  interval((double)INTERVAL);
     pxfe_timespec  now;
+    pxfe_timespec  early_alarm;
 
     give_up_privs();
 
+    early_alarm.set(0, 10000);
     ref_desired.getNow();
     // ref intervals are aligned to 1s boundaries.
     ref_desired.tv_nsec = 0;
     
     while (!done)
     {
+        // alloc first, so the variability of the malloc
+        // is already accounted for.
+        mymsg * m = p.alloc(0, false, mymsg::REF);
+        if (!m)
+            // shouldn't happen, but bad
+            break;
+
         ref_desired += interval;
+
+        pxfe_timespec early_target = ref_desired - early_alarm;
+
         now.getNow();
-        pxfe_timespec s = ref_desired - now;
-        clock_nanosleep(CLOCK_MONOTONIC,
-                        /*flags*/ 0,
-                        s(),
-                        NULL);
+        pxfe_timespec s = early_target - now;
+
+        // go to sleep, but wake up early, in case traffic is bad.
+        clock_nanosleep(CLOCK_MONOTONIC, 0, s(), NULL);
+
+        // now that we're in the lobby way early, surf the web and
+        // kill time until the exact time of the appointment.
+        do {
+            now.getNow();
+        } while (now < ref_desired);
 
 #if JITTER > 0
         long r = random();
         usleep(r % JITTER); // introduce jitter
 #endif
-        mymsg * m = p.alloc(0, false, mymsg::REF);
-        if (m)
-            q.enqueue(m);
+
+        q.enqueue(m);
     }
 
     return NULL;
@@ -128,13 +144,22 @@ void *osc_thread(void *arg)
 {
     pxfe_timespec  osc_desired;
     pxfe_timespec  now;
+    pxfe_timespec  early_alarm;
 
     give_up_privs();
 
+    early_alarm.set(0, 10000);
     osc_desired.getNow();
 
     while (!done)
     {
+        // alloc first, so the variability of the malloc
+        // is already accounted for.
+        mymsg * m = p.alloc(0, false, mymsg::OSC);
+        if (!m)
+            // shouldn't happen, but bad
+            break;
+
         if (osc_interval > MAX_INTERVAL)
             osc_interval = MAX_INTERVAL;
         else if (osc_interval < MIN_INTERVAL)
@@ -142,17 +167,22 @@ void *osc_thread(void *arg)
 
         pxfe_timespec interval = osc_interval;
         osc_desired += interval;
+
+        pxfe_timespec early_target = osc_desired - early_alarm;
+
         now.getNow();
-        pxfe_timespec s = osc_desired - now;
+        pxfe_timespec s = early_target - now;
 
-        clock_nanosleep(CLOCK_MONOTONIC,
-                        /*flags*/ 0,
-                        s(),
-                        NULL);
+        // go to sleep, but wake up early, in case traffic is bad.
+        clock_nanosleep(CLOCK_MONOTONIC, 0, s(), NULL);
 
-        mymsg * m = p.alloc(0, false, mymsg::OSC);
-        if (m)
-            q.enqueue(m);
+        // now that we're in the lobby way early, surf the web and
+        // kill time until the exact time of the appointment.
+        do {
+            now.getNow();
+        } while (now < osc_desired);
+
+        q.enqueue(m);
     }
 
     return NULL;
