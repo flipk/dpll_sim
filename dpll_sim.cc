@@ -169,9 +169,8 @@ void *dpll_thread(void *arg)
     int lock_count = 0;
     int unlock_count = 0;
     int stage = 0;
-#define SD_HISTORY_SIZE 100
-    double sd_history[SD_HISTORY_SIZE];
-    int sd_pos = 0, sd_got = 0;
+
+    stats_history<double, 100>  adjust_history;
 
     start.getNow();
     last_ref = last_osc = start;
@@ -233,13 +232,9 @@ void *dpll_thread(void *arg)
                 double adjust = prop_adjust + accum_err;
                 osc_interval = INTERVAL + adjust;
 
-                sd_history[sd_pos] = adjust;
-                if (++sd_pos >= SD_HISTORY_SIZE)
-                    sd_pos = 0;
-                if (sd_got < SD_HISTORY_SIZE)
-                    sd_got ++;
-
-                double sd = calc_stddev(sd_history, sd_got);
+                adjust_history.add(adjust);
+                double ad_sd = adjust_history.stddev();
+                double ad_av = adjust_history.average();
 
                 const char * sd_color = "";
                 const char * ae_color = "";
@@ -259,7 +254,7 @@ void *dpll_thread(void *arg)
                 else
                     ae_color = color_red;
 
-                if (sd < sp->lock_thresh)
+                if (ad_sd < sp->lock_thresh)
                 {
                     sd_color = color_green;
                     good_count ++;
@@ -296,25 +291,28 @@ void *dpll_thread(void *arg)
                     }
                 }
 
-
-
 #define PRINTARGS                                       \
-                    "%s "                               \
-                    "pe %9.6f "                         \
-                    "ae %s%13.10f%s "                   \
-                    "ad %13.10f "                       \
-                    "sd %s%13.10f%s "                   \
-                    "lc %03d uc %03d S%d\n",            \
+                "%s "                                   \
+                    "pe %8.1f "                         \
+                    "ae %s%9.3f%s "                     \
+                    "ad %8.3f "                         \
+                    "sd %s%7.3f%s "                     \
+                    "av %9.3f "                         \
+                    "lc %03d uc %03d S%d (us.ns)"       \
+                    "\n",                               \
                     last_s,                             \
-                    phase_err,                          \
-                    ae_color, accum_err, norm,          \
-                    adjust,                             \
-                    sd_color, sd, norm,                 \
+                    phase_err * 10e6,                   \
+                    ae_color, accum_err * 10e6, norm,   \
+                    adjust * 10e6,                      \
+                    sd_color, ad_sd * 10e6, norm,       \
+                    ad_av * 10e6,                       \
                     lock_count, unlock_count, stage
 
+                // sd_color and ae_color are set above.
                 norm = color_norm;
                 printf(PRINTARGS);
 
+                // clear all colors so the log file is clean.
                 sd_color = ae_color = norm = "";
                 fprintf(f, PRINTARGS);
                 fflush(f);
