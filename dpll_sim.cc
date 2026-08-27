@@ -89,8 +89,8 @@ thread_slinger_queue<mymsg>  q;
 // each thread gives up priviledges in its own time.
 static void give_up_privs(void)
 {
-    syscall(SYS_setuid, UNPRIV_UID);
     syscall(SYS_setgid, UNPRIV_GID);
+    syscall(SYS_setuid, UNPRIV_UID);
 }
 
 void *ref_thread(void * arg)
