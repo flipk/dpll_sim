@@ -99,6 +99,7 @@ void *ref_thread(void * arg)
     pxfe_timespec  interval((double)INTERVAL);
     pxfe_timespec  now;
     pxfe_timespec  early_alarm;
+    pxfe_timespec  jitter;
 
     give_up_privs();
 
@@ -116,6 +117,8 @@ void *ref_thread(void * arg)
             // shouldn't happen, but bad
             break;
 
+        jitter.set(0, random() % JITTER);
+
         ref_desired += interval;
 
         pxfe_timespec early_target = ref_desired - early_alarm;
@@ -126,18 +129,15 @@ void *ref_thread(void * arg)
         // go to sleep, but wake up early, in case traffic is bad.
         clock_nanosleep(CLOCK_MONOTONIC, 0, s(), NULL);
 
+        pxfe_timespec ref_desired_plus_jitter = ref_desired + jitter;
+
         // now that we're in the lobby way early, surf the web and
         // kill time until the exact time of the appointment.
         do {
             now.getNow(CLOCK_MONOTONIC);
-        } while (now < ref_desired);
+        } while (now < ref_desired_plus_jitter);
 
-#if JITTER > 0
-        long r = random();
-        usleep(r % JITTER); // introduce jitter
-#endif
-
-        m->stamp = now;
+        m->stamp = now; // note this is the time before the jitter.
         q.enqueue(m);
     }
 
@@ -266,8 +266,8 @@ void *dpll_thread(void *arg)
             if (do_adj)
             {
                 d = last_ref - last_osc;
-                phase_err = (double) (int64_t) d.usecs();
-                phase_err /= 1e6;
+                phase_err = (double) (int64_t) d.nsecs();
+                phase_err /= 1e9;
 
                 StageParams * sp = &stage_params[stage];
 
@@ -343,6 +343,7 @@ void *dpll_thread(void *arg)
                     "ad %8.3f "                         \
                     "sd %s%7.3f%s "                     \
                     "av %9.3f "                         \
+                    "ie %9.3f "                         \
                     "lc %03d uc %03d S%d (us.ns)"       \
                     "\n",                               \
                     last_s,                             \
@@ -351,6 +352,7 @@ void *dpll_thread(void *arg)
                     adjust * 10e6,                      \
                     sd_color, ad_sd * 10e6, norm,       \
                     ad_av * 10e6,                       \
+                    (osc_interval - INTERVAL) * 10e6,   \
                     lock_count, unlock_count, stage
 
                 // sd_color and ae_color are set above.

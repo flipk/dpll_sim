@@ -27,7 +27,7 @@ line1, = ax.plot([], [],
                  markersize=2,
                  linestyle='None')
 line2, = ax.plot([], [])
-line3, = ax2.plot([], [])
+line3, = ax2.plot([], [], color='red')
 
 lines = [line1, line2, line3]
 labels = [COL_1_NAME, COL_2_NAME, COL_3_NAME]

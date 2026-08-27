@@ -9,7 +9,7 @@ hz = 50  # in Hz
 clock_period = 1 / hz
 
 # if jitter is lower, then lock threshold should be higher.
-jitter = 1000  # in uS
+jitter = 1000000  # in nS
 
 print(f'#define HZ {hz}\n'
       f'#define INTERVAL {clock_period} // in seconds\n'
@@ -56,9 +56,9 @@ params = [
     StageParams(0.200, 0.707, 1.5e-6, 4.0e-6, 200, 9999),  # stage 0
     StageParams(0.050, 0.707, 5.0e-7, 1.0e-6, 200,  999),  # stage 1
     StageParams(0.030, 0.707, 1.5e-7, 6.0e-7, 200,  999),  # stage 2
-    StageParams(0.010, 0.707, 8.0e-8, 2.0e-7, 200,  999),  # stage 3
-    StageParams(0.005, 0.707, 4.0e-8, 1.0e-7, 200,  999),  # stage 4
-    StageParams(0.001, 0.707, 4.0e-8, 2.0e-8, 200, 5000)   # stage 5
+    StageParams(0.010, 0.707, 3.0e-8, 2.0e-7, 200,  999),  # stage 3
+    StageParams(0.005, 0.707, 2.0e-8, 1.0e-7, 200,  999),  # stage 4
+    StageParams(0.001, 0.707, 1.5e-8, 2.0e-8, 200,  999)   # stage 5
 ]
 
 print('struct StageParams {\n'
