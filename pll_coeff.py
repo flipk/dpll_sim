@@ -5,7 +5,7 @@ import os
 gid = os.getgid()
 uid = os.getuid()
 
-hz = 50  # in Hz
+hz = 100  # in Hz
 clock_period = 1 / hz
 
 # if jitter is lower, then lock threshold should be higher.
@@ -24,12 +24,14 @@ class StageParams:
                  accum_error_thresh: float,
                  lock_thresh: float,
                  lock_count: int,
+                 lock_fail_count: int,
                  unlock_count: int):
         self.loop_bandwidth = loop_bandwidth
         self.zeta = zeta
         self.accum_error_thresh = accum_error_thresh
         self.lock_thresh = lock_thresh
         self.lock_count = lock_count
+        self.lock_fail_count = lock_fail_count
         self.unlock_count = unlock_count
         self.calc_coeffs()
 
@@ -52,14 +54,14 @@ class StageParams:
         self.k_i = (4 * (wt**2)) / denominator
 
 params = [
-#               bw     zeta   errth   sdth    lc   uc
-    StageParams(0.2000, 0.707, 1.5e-6, 4.0e-6, 200, 9999),  # stage 0
-    StageParams(0.0500, 0.707, 5.0e-7, 1.0e-6, 200,  999),  # stage 1
-    StageParams(0.0300, 0.707, 1.5e-7, 6.0e-7, 200,  999),  # stage 2
-    StageParams(0.0100, 0.707, 3.0e-8, 2.0e-7, 200,  999),  # stage 3
-    StageParams(0.0050, 0.707, 2.0e-8, 1.0e-7, 200,  999),  # stage 4
-    StageParams(0.0010, 0.707, 1.5e-8, 2.0e-8, 200,  999),  # stage 5
-    StageParams(0.0002, 0.707, 1.0e-8, 1.0e-8, 200,  999)   # stage 6
+#               bw      zeta   errth   sdth    lc   lfc, uc
+    StageParams(0.2000, 0.707, 1.5e-6, 4.0e-6, 200, 2000, 9999),  # stage 0
+    StageParams(0.0500, 0.707, 5.0e-7, 1.0e-6, 200, 2000,  999),  # stage 1
+    StageParams(0.0300, 0.707, 1.5e-7, 6.0e-7, 200, 2000,  999),  # stage 2
+    StageParams(0.0100, 0.707, 3.0e-8, 2.0e-7, 200, 2000,  999),  # stage 3
+    StageParams(0.0050, 0.707, 2.0e-8, 1.0e-7, 200, 2000,  999),  # stage 4
+    StageParams(0.0010, 0.707, 1.5e-8, 2.0e-8, 200, 2000,  999),  # stage 5
+    StageParams(0.0002, 0.707, 1.0e-8, 1.0e-8, 200, 2000,  999)   # stage 6
 ]
 
 print('struct StageParams {\n'
@@ -68,6 +70,7 @@ print('struct StageParams {\n'
       '   double accum_error_thresh;\n'
       '   double lock_thresh;\n'
       '   int lock_thresh_count;\n'
+      '   int lock_fail_count;\n'
       '   int unlock_thresh_count;\n'
       '};\n'
       'static StageParams stage_params[] = {')
@@ -78,7 +81,7 @@ for p in params:
           '   { '
           f'{p.k_p:12e}, {p.k_i:12e}, '
           f'{p.accum_error_thresh}, {p.lock_thresh}, '
-          f'{p.lock_count}, {p.unlock_count} '
+          f'{p.lock_count}, {p.lock_fail_count}, {p.unlock_count} '
           '},')
     stage += 1
 

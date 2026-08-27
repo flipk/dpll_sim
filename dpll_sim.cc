@@ -316,18 +316,30 @@ void *dpll_thread(void *arg)
                 if (good_count == 2)
                 {
                     unlock_count = 0;
-                    if (lock_count >= sp->lock_thresh_count  &&
-                        ae_sign_changed)
+                    if (ae_sign_changed  &&
+                        lock_count >= sp->lock_thresh_count)
                     {
                         if (stage < (NUM_STAGES-1))
                         {
                             stage ++;
-                            lock_count = 0;
                         }
+                        lock_count = 0;
                     }
                     else
-                        lock_count ++;
-
+                    {
+                        if (stage < (NUM_STAGES-1))
+                        {
+                            lock_count ++;
+                            if (lock_count >= sp->lock_fail_count)
+                            {
+                                if (stage > 0)
+                                {
+                                    stage --;
+                                    lock_count = 0;
+                                }
+                            }
+                        }
+                    }
                 }
                 else
                 {
@@ -346,7 +358,8 @@ void *dpll_thread(void *arg)
 #define PRINTARGS                                       \
                 "%s "                                   \
                     "pe %8.1f "                         \
-                    "ae %s%9.3f%s "                     \
+                    "ae %s%12.6f%s "                    \
+                    "pa %9.3f "                         \
                     "ad %8.3f "                         \
                     "sd %s%7.3f%s "                     \
                     "av %9.3f "                         \
@@ -356,6 +369,7 @@ void *dpll_thread(void *arg)
                     last_s,                             \
                     phase_err * 10e6,                   \
                     ae_color, accum_err * 10e6, norm,   \
+                    prop_adjust * 10e6,                 \
                     adjust * 10e6,                      \
                     sd_color, ad_sd * 10e6, norm,       \
                     ad_av * 10e6,                       \

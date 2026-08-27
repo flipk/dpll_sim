@@ -10,9 +10,9 @@ UPDATE_INTERVAL_SEC = 0.45
 MAX_LINES = 1400
 
 # Column indices (0-indexed)
-COL_1_IDX = 6  # 'adjust'
+COL_1_IDX = 8  # 'adjust'
 COL_2_IDX = 4  # 'accum error'
-COL_3_IDX = 8  # 'standard deviation' (of adjust)
+COL_3_IDX = 10  # 'standard deviation' (of adjust)
 
 # Plot labels
 COL_1_NAME = "adjustments"
