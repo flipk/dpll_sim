@@ -11,11 +11,6 @@ rm -f dpll_sim
 exit 0
 #endif
 
-
-// IDEA : if ae does a zero-crossing while in the green/green state,
-//   transition to next stage then.
-
-
 #if 0
 # set terminal qt noraise
 
@@ -45,6 +40,7 @@ eval repeat_plot
 #include <sys/select.h>
 #include <vector>
 #include <math.h>
+#include <cmath>
 #include <syscall.h>
 
 #include "posix_fe.h"
@@ -91,6 +87,10 @@ static void give_up_privs(void)
 {
     syscall(SYS_setgid, UNPRIV_GID);
     syscall(SYS_setuid, UNPRIV_UID);
+}
+
+bool haveOppositeSigns(double a, double b) {
+    return std::signbit(a) != std::signbit(b);
 }
 
 void *ref_thread(void * arg)
@@ -207,7 +207,7 @@ void *dpll_thread(void *arg)
     f = fopen(LOGFILE, "w");
 
     // positive means osc is too slow, negative too fast.
-    double accum_err = 0;
+    double accum_err = 0, prev_accum_err = 0;
     double prop_adjust = 0;
     double phase_err;
 
@@ -274,6 +274,12 @@ void *dpll_thread(void *arg)
                 accum_err  += phase_err * sp->k_i;
                 prop_adjust = phase_err * sp->k_p;
 
+                bool ae_sign_changed =
+                    haveOppositeSigns(accum_err,
+                                      prev_accum_err);
+
+                prev_accum_err = accum_err;
+
                 double adjust = prop_adjust + accum_err;
                 osc_interval = INTERVAL + adjust;
 
@@ -310,7 +316,8 @@ void *dpll_thread(void *arg)
                 if (good_count == 2)
                 {
                     unlock_count = 0;
-                    if (lock_count >= sp->lock_thresh_count)
+                    if (lock_count >= sp->lock_thresh_count  &&
+                        ae_sign_changed)
                     {
                         if (stage < (NUM_STAGES-1))
                         {

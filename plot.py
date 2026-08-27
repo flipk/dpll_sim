@@ -31,7 +31,7 @@ line3, = ax2.plot([], [], color='red')
 
 lines = [line1, line2, line3]
 labels = [COL_1_NAME, COL_2_NAME, COL_3_NAME]
-ax.legend(lines, labels, loc='upper right')
+ax.legend(lines, labels, loc='upper left')
 
 ax.grid(True)
 ax2.grid(True)
