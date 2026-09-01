@@ -364,7 +364,7 @@ void *dpll_thread(void *arg)
                     "sd %s%7.3f%s "                     \
                     "av %9.3f "                         \
                     "ie %9.3f "                         \
-                    "lc %03d uc %03d S%d (us.ns)"       \
+                    "lc %04d uc %03d S%d (us.ns)"       \
                     "\n",                               \
                     last_s,                             \
                     phase_err * 10e6,                   \

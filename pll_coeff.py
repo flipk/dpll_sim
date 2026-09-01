@@ -60,8 +60,8 @@ params = [
     StageParams(0.0300, 0.707, 1.5e-7, 6.0e-7, 200, 2000,  999),  # stage 2
     StageParams(0.0100, 0.707, 3.0e-8, 2.0e-7, 200, 2000,  999),  # stage 3
     StageParams(0.0050, 0.707, 2.0e-8, 1.0e-7, 200, 2000,  999),  # stage 4
-    StageParams(0.0010, 0.707, 1.5e-8, 2.0e-8, 200, 2000,  999),  # stage 5
-    StageParams(0.0002, 0.707, 1.0e-8, 1.0e-8, 200, 2000,  999)   # stage 6
+    StageParams(0.0010, 0.707, 1.0e-8, 2.0e-8, 200, 2000,  999),  # stage 5
+    StageParams(0.0002, 0.707, 0.1e-9, 1.0e-8, 200, 2000,  999)   # stage 6
 ]
 
 print('struct StageParams {\n'
