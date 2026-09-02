@@ -2,6 +2,7 @@
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.ticker as ticker
 from collections import deque
 
 # --- GLOBAL CONFIGURATION ---
@@ -46,6 +47,13 @@ ax_bot_left.grid(True)
 # Add this right after configuring your legends and grids
 ax_bot_left.axhline(0, color='black', linewidth=2)
 
+# Configure tick formatters for all three y-axes
+for ax in (ax_top, ax_bot_left, ax_bot_right):
+    formatter = ticker.ScalarFormatter(useMathText=True)
+    formatter.set_scientific(True)
+    formatter.set_powerlimits((-3, 3))
+    ax.yaxis.set_major_formatter(formatter)
+
 def update_plot(frame):
     # Core read logic directly implemented
     with open(DATA_FILE, 'r') as f:
@@ -76,15 +84,16 @@ def update_plot(frame):
 
     return line1, line2, line3, line4
 
-ani = animation.FuncAnimation(
-    fig, 
-    update_plot, 
-    interval=UPDATE_INTERVAL_SEC * 1000, 
-    blit=False, 
-    cache_frame_data=False
-)
 
 if __name__ == "__main__":
+    ani = animation.FuncAnimation(
+        fig,
+        update_plot,
+        interval=UPDATE_INTERVAL_SEC * 1000,
+        blit=False,
+        cache_frame_data=False
+    )
     # Adjust layout padding so subplots don't overlap
-    plt.tight_layout()
+    # plt.tight_layout()
+    plt.subplots_adjust(left=0.12, right=0.88, top=0.92, bottom=0.08)
     plt.show()
