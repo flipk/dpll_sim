@@ -289,7 +289,6 @@ void *dpll_thread(void *arg)
 
                 const char * sd_color = "";
                 const char * ae_color = "";
-                const char * norm = "";
                 static const char * color_red   = "[31;1m";
                 static const char * color_green = "[32;1m";
                 static const char * color_norm  = "[m";
@@ -355,7 +354,7 @@ void *dpll_thread(void *arg)
                     }
                 }
 
-#define PRINTARGS                                       \
+#define PRINTARGS_CONSOLE                               \
                 "%s "                                   \
                     "pe %8.1f "                         \
                     "ae %s%12.6f%s "                    \
@@ -368,21 +367,39 @@ void *dpll_thread(void *arg)
                     "\n",                               \
                     last_s,                             \
                     phase_err * 10e6,                   \
-                    ae_color, accum_err * 10e6, norm,   \
+                    ae_color, accum_err * 10e6, color_norm,     \
                     prop_adjust * 10e6,                 \
                     adjust * 10e6,                      \
-                    sd_color, ad_sd * 10e6, norm,       \
+                    sd_color, ad_sd * 10e6, color_norm, \
                     ad_av * 10e6,                       \
                     (osc_interval - INTERVAL) * 10e6,   \
                     lock_count, unlock_count, stage
 
-                // sd_color and ae_color are set above.
-                norm = color_norm;
-                printf(PRINTARGS);
+#define PRINTARGS_LOGFILE                               \
+                "%s "             /*0*/                 \
+                    " %13e "      /*1*/                 \
+                    " %13e "      /*2*/                 \
+                    " %13e "      /*3*/                 \
+                    " %13e "      /*4*/                 \
+                    " %13e "      /*5*/                 \
+                    " %13e "      /*6*/                 \
+                    " %13e "      /*7*/                 \
+                    " %d %d S%d " /*8 9 10*/            \
+                    "\n",                               \
+                    last_s,         /*0*/               \
+                    phase_err,      /*1*/               \
+                    accum_err,      /*2*/               \
+                    prop_adjust,    /*3*/               \
+                    adjust,         /*4*/               \
+                    ad_sd,          /*5*/               \
+                    ad_av,          /*6*/               \
+                    (osc_interval - INTERVAL),  /*7*/   \
+                    lock_count,     /*8*/               \
+                    unlock_count,   /*9*/               \
+                    stage           /*10*/
 
-                // clear all colors so the log file is clean.
-                sd_color = ae_color = norm = "";
-                fprintf(f, PRINTARGS);
+                printf(PRINTARGS_CONSOLE);
+                fprintf(f, PRINTARGS_LOGFILE);
                 fflush(f);
             }
 
