@@ -55,6 +55,7 @@ public:
         if (got < hist_size)
             got++;
     }
+    int count(void) const { return got; }
     T variance(void) {
         return calc_variance(history, got);
     }

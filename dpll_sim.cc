@@ -215,6 +215,10 @@ void *dpll_thread(void *arg)
     int unlock_count = 0;
     int stage = 0;
 
+    // linux simulation (particularly on WSL) introduces random
+    // wacky out of bound readings in phase error. reject those
+    // that are 3-sigma out of bounds.
+    stats_history<double, 100>  phase_err_history;
     stats_history<double, 100>  adjust_history;
 
     start.getNow(CLOCK_MONOTONIC);
@@ -268,6 +272,21 @@ void *dpll_thread(void *arg)
                 d = last_ref - last_osc;
                 phase_err = (double) (int64_t) d.nsecs();
                 phase_err /= 1e9;
+
+                if (phase_err_history.count() >= 30)
+                {
+                    double pe_sd = phase_err_history.stddev();
+                    double pe_av = phase_err_history.average();
+
+                    // Reject deviations > 3 standard deviations
+                    if (fabs(phase_err - pe_av) > (3.0 * pe_sd))
+                    {
+                        //printf("OUTLIER DETECTED, SKIPPED\n");
+                        goto next_iter;
+                    }
+                }
+
+                phase_err_history.add(phase_err);
 
                 StageParams * sp = &stage_params[stage];
 
@@ -403,6 +422,7 @@ void *dpll_thread(void *arg)
                 fflush(f);
             }
 
+        next_iter:
             p.release(m);
         }
     }
