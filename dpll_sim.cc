@@ -361,8 +361,8 @@ void *dpll_thread(void *arg)
                     "ae %s%12.6f%s "                    \
                     "pa %9.3f "                         \
                     "ad %8.3f "                         \
-                    "sd %s%7.3f%s "                     \
-                    "av %9.3f "                         \
+                    "sd %s%10.6f%s "                    \
+                    "av %12.6f "                        \
                     "ie %9.3f "                         \
                     "lc %04d uc %03d S%d (us.ns)"       \
                     "\n",                               \
