@@ -373,25 +373,25 @@ void *dpll_thread(void *arg)
                     }
                 }
 
-#define PRINTARGS_CONSOLE                               \
-                "%s "                                   \
-                    "pe %8.1f "                         \
-                    "ae %s%12.6f%s "                    \
-                    "pa %9.3f "                         \
-                    "ad %8.3f "                         \
-                    "sd %s%10.6f%s "                    \
-                    "av %12.6f "                        \
-                    "ie %9.3f "                         \
-                    "lc %04d uc %03d S%d (us.ns)"       \
-                    "\n",                               \
-                    last_s,                             \
-                    phase_err * 10e6,                   \
-                    ae_color, accum_err * 10e6, color_norm,     \
-                    prop_adjust * 10e6,                 \
-                    adjust * 10e6,                      \
-                    sd_color, ad_sd * 10e6, color_norm, \
-                    ad_av * 10e6,                       \
-                    (osc_interval - INTERVAL) * 10e6,   \
+#define PRINTARGS_CONSOLE                                       \
+                "%s "                                           \
+                    "ie:%9.3f "                                 \
+                    "pe:%8.1f "                                 \
+                    "ae:%s%15.9f%s "                            \
+                    "pa:%12.6f "                                \
+                    "ad:%11.6f "                                \
+                    "sd:%s%10.6f%s "                            \
+                    "av:%12.6f "                                \
+                    "lc:%04d uc:%03d S%d (us.ns)"               \
+                    "\n",                                       \
+                    last_s,                                     \
+                    (osc_interval - INTERVAL) * 1e6,            \
+                    phase_err * 1e6,                            \
+                    ae_color, accum_err * 1e6, color_norm,      \
+                    prop_adjust * 1e6,                          \
+                    adjust * 1e6,                               \
+                    sd_color, ad_sd * 1e6, color_norm,          \
+                    ad_av * 1e6,                                \
                     lock_count, unlock_count, stage
 
 #define PRINTARGS_LOGFILE                               \
