@@ -27,25 +27,22 @@ COL_4_NAME = "adjustment average"
 fig, (ax_top_left, ax_bot_left) = plt.subplots(2, 1, sharex=True)
 
 # Create secondary right Y axes
-ax_top_right = ax_top_left.twinx()
 ax_bot_right = ax_bot_left.twinx()
 
 # Plot lines
-line1, = ax_top_right.plot([], [], color='blue',
+line1, = ax_top_left.plot([], [], color='blue',
                           marker='o', markersize=2, linestyle='None')
-line2, = ax_top_left.plot([], [], color='red')
-line3, = ax_bot_right.plot([], [], color='blue')
-line4, = ax_bot_left.plot([], [], color='red')
+line2, = ax_bot_left.plot([], [], color='blue')
+line3, = ax_bot_right.plot([], [], color='red')
+line4, = ax_top_left.plot([], [], color='red')
 
 # Legends
-ax_top_right.legend([line1], [COL_1_NAME], loc='upper right',
-                    framealpha=0.9, draggable=True)
-ax_top_left .legend([line2], [COL_2_NAME], loc='upper left' ,
-                    framealpha=0.9, draggable=True)
-ax_bot_right.legend([line3], [COL_3_NAME], loc='upper right',
-                    framealpha=0.9, draggable=True)
-ax_bot_left .legend([line4], [COL_4_NAME], loc='upper left' ,
-                    framealpha=0.9, draggable=True)
+ax_top_left .legend([line1, line4], [COL_1_NAME, COL_4_NAME],
+                    loc='upper left' , framealpha=0.9, draggable=True)
+ax_bot_left .legend([line2], [COL_2_NAME],
+                    loc='upper left' , framealpha=0.9, draggable=True)
+ax_bot_right.legend([line3], [COL_3_NAME],
+                    loc='upper right', framealpha=0.9, draggable=True)
 
 
 # only the left Y axes have grids
@@ -57,7 +54,7 @@ ax_top_left.axhline(0, color='black', linewidth=2)
 ax_bot_left.axhline(0, color='black', linewidth=2)
 
 # engineering notation (powers of 10 that are multiples of 3)
-for ax in (ax_top_left, ax_top_right, ax_bot_left, ax_bot_right):
+for ax in (ax_top_left, ax_bot_left, ax_bot_right):
     ax.yaxis.set_major_formatter(ticker.EngFormatter(places=1,
                                                      useMathText=True))
 
@@ -69,6 +66,10 @@ def update_plot(frame):
     except:
         # if file doesn't exist, keep polling and maybe
         # it will soon appear.
+        return None
+
+    if len(tail_lines) == 0:
+        # file is empty, bail out
         return None
 
     y1_data, y2_data, y3_data, y4_data = [], [], [], []
@@ -89,7 +90,7 @@ def update_plot(frame):
     line4.set_data(x_data, y4_data)
 
     # Recompute data limits and scale each axis independently
-    for ax in (ax_top_left, ax_top_right, ax_bot_left, ax_bot_right):
+    for ax in (ax_top_left, ax_bot_left, ax_bot_right):
         ax.relim()
         ax.autoscale_view(scalex=False, scaley=True)
         ax.set_xlim(0, max(1, len(x_data)))
