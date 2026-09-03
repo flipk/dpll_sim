@@ -38,11 +38,11 @@ line4, = ax_top_left.plot([], [], color='red')
 
 # Legends
 ax_top_left .legend([line1, line4], [COL_1_NAME, COL_4_NAME],
-                    loc='upper left' , framealpha=0.9, draggable=True)
+                    loc='upper left' , framealpha=0.9)
 ax_bot_left .legend([line2], [COL_2_NAME],
-                    loc='upper left' , framealpha=0.9, draggable=True)
+                    loc='upper left' , framealpha=0.9)
 ax_bot_right.legend([line3], [COL_3_NAME],
-                    loc='upper right', framealpha=0.9, draggable=True)
+                    loc='upper right', framealpha=0.9)
 
 
 # only the left Y axes have grids
