@@ -5,7 +5,7 @@ cat Params.h
 g++ -O3 -Wall -I lib -o dpll_sim \
     lib/signal_backtrace.cc \
     lib/thread_slinger.cc \
-    dpll_sim.cc
+    dpll_sim.cc -lpthread
 sudo ./dpll_sim
 rm -f dpll_sim
 exit 0
