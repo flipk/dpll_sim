@@ -3,13 +3,13 @@
 
 This is a software simulation of a `Digital Phase Locked Loop`.
 
-The exact scenario which triggered this project was one discovered
-online, in which the author attempted to discipline a 1PPS oscillator
-by using NTP over wifi. He encountered significant jitter but was
-trying to use a form of proportional integrator to average out the
-jitter and recover the original high precision timing.  He never got
-it to work, but I believed it was due to errors in configuration of
-the loop parameters. He was experimenting in the dark, just trying
+The scenario which triggered this project was a hobbyist project
+discovered online, in which the author attempted to discipline a 1PPS
+oscillator by using NTP over wifi. He encountered significant jitter
+but was trying to use a form of proportional integrator to average out
+the jitter and recover the original high precision timing.  He never
+got it to work, but I believed it was due to errors in configuration
+of the loop parameters. He was experimenting in the dark, just trying
 stuff, rather than understanding the math behind the scenario.
 
 This tool simulates such an environment, but using the math correctly.
@@ -40,20 +40,44 @@ both the ref and oscillator and uses UP and DOWN states to look for
 time differences between pulse edges, adjusting `osc_interval` as
 required.
 
+## The Two Versions
+
+`dpll_sim.cc` is a version using multiple "stages", where it advances
+from one stage to the next as each stage achieves lock. Each stage has
+successivly smaller loop bandwidths. This is done because a very small
+loop bandwidth takes an enormous amount of time to lock, but a large
+loop bandwidth has a lot of jitter in the output. The multi-stage setup
+is the best of both worlds.
+
+`dpll_sim2.cc' is a different version with a different "stage"
+mechanism, in which the loop bandwidth is dynamically adjusted on the
+fly based on the amount of accumulated error. Where `dpll_sim.cc` has
+a set of precalculated loop bandwidths, this one recalculates K_p and
+K_i coefficients on the fly.  But, it also has multiple stages, as it
+doesn't start advancing towards a smaller loop bandwidth until the
+error has dropped below a threshold.
+
 ## Running
 
-The C code is also a bash script.  Run `bash dpll_sim.cc` and it will
-run `pll_coeff.py` (inserting `#define` statements into a header
-file), compile the C code, then run the C code.  I currently run it as
-root so it has permissions to set thread priorities to real-time, but
-that isn't necessary if you just want to see it work.
+The C code for `dpll_sim.cc` is also a bash script.  Run `bash
+dpll_sim.cc` and it will run `pll_coeff.py` (inserting `#define`
+statements into a header file), compile the C code, then run the C
+code.  I currently run it as root so it has permissions to set thread
+priorities to real-time, but that isn't necessary if you just want to
+see it work.
+
+`dpll_sim2.cc` is also a bash script at the top but it doesn't run any
+python to generate the the coefficients; it just compiles the file and
+runs it.
 
 ## Plotting Results
 
-The `plot.py` runs at the same time and reads the `plot.dat` output file,
-plotting points live as the program runs.  With this you can observe the
-frequency adjustments and the phase difference measurements, and watch
-them converge.
+The `plot.py` is matched to `dpll_sim.cc`.  The `plot2.py` is matched
+to `dpll_sim2.cc`.  In each case, the plotter should be run at the
+same time as the C program.  The plotter reads the `plot.dat` output
+file, plotting points live as the program runs.  With this you can
+observe the frequency adjustments and the phase difference
+measurements, and watch them converge.
 
 # Discussion
 
@@ -70,55 +94,23 @@ scenario—disciplining a local oscillator using a highly jittery
 network reference—is the core engineering challenge behind the `Network
 Time Protocol (NTP)` and the `Precision Time Protocol (PTP)`.
 
-### A hardware solution
 
-Suppose you were building a pure hardware PLL to implement this.
+### Theory
 
-If the source is perfectly stable but the transport channel is
-incredibly noisy, and you do not care about lock time, you want a very
-narrow loop bandwidth.
+In an analog PLL, you have physical resistors and capacitors. The
+'tank' capacitor and the charge pump current define the loop filter
+corner frequency. The resistor size in series with the capacitor
+determines the damping factor. Standard formulas exist for calculating
+the relationship between the tank capacitor, charge pump current, and
+resistor values.  The phase detector circuit produces "UP" or "DOWN"
+pulses to alter the control voltage in the tank capacitor. The closer
+the reference and feedback clocks, the smaller the pulses, so the more
+stable the control voltage.  A "fastlock" feature is often implemented
+by altering the charge pump current higher, raising the loop
+bandwidth, until a "lock" detection circuit says it is locked.
 
-1. Adjusting `I_cp` and `C_tank` for Narrow Bandwidth.
-
-In a charge-pump PLL, the natural frequency (which dictates the loop
-bandwidth, (`omega_n`) is proportional to `sqrt(I_cp / C_tank)`. To
-narrow the bandwidth, you would minimize the charge pump current
-(`I_cp`) and maximize the size of your loop filter capacitor
-(`C_tank`).
-
-By doing this, the PLL acts as an aggressive Low-Pass Filter for
-Phase. It becomes virtually blind to the high-frequency cycle-to-cycle
-jitter (the variable packet timing) and only responds to the
-long-term, heavily averaged DC phase difference.
-
-Caveat: Because the PLL is largely ignoring the reference signal in
-the short term, your local `Voltage Controlled Oscillator (VCO)` must
-have excellent short-term stability (low phase noise/drift) so it
-doesn't drift away while the loop filter is "thinking."
-
-2. Should you use a `zeta` other than 0.707?
-
-Yes. In extreme high-jitter scenarios, you often want to heavily
-over-damp the system (e.g., `zeta = 1.5 to 5.0`).
-
-While `zeta = 0.707` is optimal for quick settling, it exhibits a
-phenomenon called Jitter Peaking. At frequencies near the loop
-bandwidth, a critically damped or slightly underdamped PLL actually
-has a gain slightly greater than 1. This means it amplifies jitter at
-that specific resonant frequency.
-
-Because you have massive transport jitter and zero care for lock time,
-you want to completely eliminate jitter peaking. Increasing `zeta`
-flattens the frequency response, ensuring that the jitter is strictly
-attenuated and never amplified. It will take a glacial amount of time
-to lock, but the lock will be rock solid.
-
-
-### A software solution
-
-In an analog PLL, you have physical resistors and capacitors. In a
-software `Digital Phase-Locked Loop (DPLL)`, your loop filter is
-usually implemented as a `Proportional-Integral (PI) Controller`.
+In a software `Digital Phase-Locked Loop (DPLL)`, your loop filter is
+implemented as a `Proportional-Integral (PI) Controller`.
 
 Instead of an analog voltage controlling a VCO, you have software
 variables adjusting the duration of a timer or a digital counter. Here
@@ -137,28 +129,19 @@ is how the analog concepts map to software:
     proportional to `sqrt(K_i)`. To get your desired "very low
     frequency response," you make `K_i` and `K_p` incredibly small.
 
-Damping Factor (`zeta`) is roughly proportional to `K_p /
-sqrt(K_i)`. To get your heavily overdamped, no-jitter-peaking response
-(`zeta > 1`), you ensure that your Proportional gain (`K_p`), while
-small, is mathematically much larger than your Integral gain (`K_i`).
+Damping Factor (`zeta`) is roughly proportional to `K_p / sqrt(K_i)`.
+Formulas are implemented in the python code for the first version and
+in C code for the second to calculate K_p and K_i values given the
+desired loop bandwidth and zeta. Both versions implements standard
+formulas for the `Natural Frequency Mapping`, derived using `Impulse
+Invariant Mapping`.
 
-### How it works in practice (1PPS over Wi-Fi)
-
-Every time a packet arrives, you measure the error (e.g., +15ms,
--40ms, +5ms). Because your `K_p` and `K_i` are tiny, the software loop
-barely reacts to a single +15ms error. It just adds a tiny fraction of
-that error to an accumulator. It might take 10,000 packets (over 2.5
-hours at 1PPS) for the accumulator to build up enough mathematical
-weight to shift your local oscillator's frequency, effectively
-averaging out all the Wi-Fi jitter perfectly.
-
-
-
-# Configuring DPLL parameters
-
-The python function `calculate_pll_coeffs` in `pll_coeff.py`
-implements standard formulas for the `Natural Frequency Mapping`,
-derived using `Impulse Invariant Mapping`.
+Every time a ref packet arrives, you measure the error.  Because your
+`K_p` and `K_i` are tiny, the software loop barely reacts to a single
+error. It just adds a tiny fraction of that error to an
+accumulator. It might take 1,000 packets for the accumulator to build
+up enough mathematical weight to shift your local oscillator's
+frequency, effectively averaging out the jitter perfectly.
 
 
 ## A note on zeta

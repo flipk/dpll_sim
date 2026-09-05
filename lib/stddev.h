@@ -70,4 +70,35 @@ public:
             sum += history[ind];
         return sum / got;
     }
+T slope(void) {
+        if (got < 2)
+            return 0; // Slope requires at least two points
+
+        T sum_x = 0;
+        T sum_y = 0;
+        T sum_xy = 0;
+        T sum_x2 = 0;
+
+        // Determine the index of the oldest element
+        int start_idx = (got < hist_size) ? 0 : pos;
+
+        for (int i = 0; i < got; ++i)
+        {
+            // Read chronologically from oldest to newest
+            T y = history[(start_idx + i) % hist_size];
+
+            sum_x += i;
+            sum_y += y;
+            sum_xy += i * y;
+            sum_x2 += i * i;
+        }
+
+        T numerator = (got * sum_xy) - (sum_x * sum_y);
+        T denominator = (got * sum_x2) - (sum_x * sum_x);
+
+        if (denominator == 0)
+            return 0; // Prevent division by zero
+
+        return numerator / denominator;
+    }
 };
