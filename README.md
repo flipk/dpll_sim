@@ -14,24 +14,48 @@ stuff, rather than understanding the math behind the scenario.
 
 This tool simulates such an environment, but using the math correctly.
 
+Someday it might be nice to see this in an FPGA, but there are
+caveats with that, too-- see the note on FPGA implementation below.
+
+
+## A note on the limits
+
+This tool is written for linux, tested on Fedora, Ubuntu, and WSL
+(Ubuntu) environments. As such, since it is using `struct timespec`
+with calls like `clock_nanosleep` and `clock_gettime`, the absolute
+best possible resolution of time is 1 nanosecond, and even that is
+subject to the whims of the linux kernel (or in WSL's case, the
+Windows kernel). Scheduling more precisely than 1 nanosecond is
+not possible, and measuring more precisely than 1 nanosecond is
+possible but only with levels of effort not pursued in this
+simulation.
+
+When running this code, sometimes it seems like it gets precision
+better than that -- but be aware that is just due to averaging of
+lots of samples. The tick-to-tick interval is NOT that precise.
+
+
 ## Reference Osc Thread
 
 There is a thread that produces a `reference oscillator`.  Picture
 this as a packet source from a remote device, maybe an ESP32 with a
 GPS module that produces UDP packets over wifi on every 1PPS pulse.
-This simulation adds up to 5 milliseconds of jitter on every packet.
+However, 1PPS is far too slow for simulation purposes, so this
+produces packets at 100 Hz.  It also adds up to 1 millisecond of
+jitter on every packet.
+
 
 ## Local Osc Thread
 
 There is a thread representing a local oscillator. This is currently
-missing the divider but picture a local 10MHz oscillator that you want
-to be disciplined to a high degree of accuracy with the 1PPS.  The
-local oscillator thread produces pulses also at 1PPS; if we had the
-divider, it would just count to ten million or something and deliver a
-packet only on the 1 second intervals.  The frequency of this
-oscillator is tunable, in the simulation by adjusting a global
-variable `osc_interval`.  On a real oscillator you would write a DAC
-that controls a VCO.
+missing the divider, but picture a local 10MHz oscillator that you
+want to be disciplined to a high degree of accuracy with the 1PPS.  As
+with the Reference oscillator thread, for simulation purposes, 1PPS is
+far too slow to be interesting, so this thread also produces packets
+at 100 Hz.  The frequency is tuned by the D-PLL thread by adjusting a
+global variable `osc_interval`.  On a real oscillator you could write
+a DAC that controls a VCO.
+
 
 ## D-PLL Thread
 
@@ -40,22 +64,34 @@ both the ref and oscillator and uses UP and DOWN states to look for
 time differences between pulse edges, adjusting `osc_interval` as
 required.
 
+
 ## The Two Versions
 
-`dpll_sim.cc` is a version using multiple "stages", where it advances
-from one stage to the next as each stage achieves lock. Each stage has
-successivly smaller loop bandwidths. This is done because a very small
-loop bandwidth takes an enormous amount of time to lock, but a large
-loop bandwidth has a lot of jitter in the output. The multi-stage setup
-is the best of both worlds.
+`dpll_sim.cc` implements a multi-stage phase-locked loop to optimize
+both lock time and output stability. The loop begins with a wide
+bandwidth for rapid initial locking, then progressively advances to
+stages with narrower bandwidths to minimize output jitter.
 
-`dpll_sim2.cc' is a different version with a different "stage"
+A key feature of this implementation is its stage-advancement
+criteria: the algorithm will not transition to the next stage until it
+observes a zero-crossing in the accumulated error. Because the system
+naturally oscillates as it tracks the reference, a zero-crossing is
+inevitable. Triggering the transition exactly at this zero-crossing
+ensures the subsequent stage—with its tightened control
+parameters—inherits a near-zero error offset. This prevents the
+narrower loop from struggling to slowly correct a large initial
+transient left by the previous stage.
+
+`dpll_sim2.cc` is a different version with a different "stage"
 mechanism, in which the loop bandwidth is dynamically adjusted on the
 fly based on the amount of accumulated error. Where `dpll_sim.cc` has
 a set of precalculated loop bandwidths, this one recalculates K_p and
-K_i coefficients on the fly.  But, it also has multiple stages, as it
-doesn't start advancing towards a smaller loop bandwidth until the
-error has dropped below a threshold.
+K_i coefficients on the fly.  But, it uses a continuous dynamic
+adjustment instead of discrete stages, gradually reducing the loop
+bandwidth multiplier.  It advances in stages (enforced by the
+thresholds in `calc_min_bw`) which limit the loop bandwidth until the
+accumulated error has dropped below specified thresholds.
+
 
 ## Running
 
@@ -70,6 +106,7 @@ see it work.
 python to generate the the coefficients; it just compiles the file and
 runs it.
 
+
 ## Plotting Results
 
 The `plot.py` is matched to `dpll_sim.cc`.  The `plot2.py` is matched
@@ -78,6 +115,7 @@ same time as the C program.  The plotter reads the `plot.dat` output
 file, plotting points live as the program runs.  With this you can
 observe the frequency adjustments and the phase difference
 measurements, and watch them converge.
+
 
 # Discussion
 
@@ -95,7 +133,74 @@ network reference—is the core engineering challenge behind the `Network
 Time Protocol (NTP)` and the `Precision Time Protocol (PTP)`.
 
 
-### Theory
+## Theory of the original project
+
+A timing signal originating from a GPS 1-Pulse-Per-Second (1PPS)
+source possesses exceptional long-term frequency stability,
+effectively tied to atomic clocks. When this precise pulse triggers an
+interrupt to generate a network packet, and that packet is pushed
+through an operating system network stack and transmitted over Wi-Fi,
+the signal degrades severely.
+
+### The Noise Profile
+
+The transport mechanism introduces two distinct timing errors:
+
+  - Latency (Static Delay): The baseline time it takes for hardware
+    processing, interrupt handling, and electromagnetic
+    propagation. This destroys absolute accuracy (phase alignment with
+    UTC) unless perfectly measured and subtracted.
+  - Packet Delay Variation (PDV / Jitter): Wi-Fi utilizes Carrier
+    Sense Multiple Access with Collision Avoidance (CSMA/CA). If the
+    airwaves are busy, the radio buffers the packet. This introduces
+    highly asymmetric, non-Gaussian jitter. The delay can spike to
+    tens or hundreds of milliseconds, but it can never be shorter than
+    the physical baseline latency.
+
+### The Reconstruction Process
+
+To strip away this network jitter and recover the underlying
+precision, the receiving device must implement a Digital Phase-Locked
+Loop (DPLL) or a software clock discipline algorithm.
+
+  - Local Oscillator (LO) Dependency: The receiver must possess a
+    stable local clock (like a TCXO—Temperature Compensated Crystal
+    Oscillator). Because the network updates are noisy, the receiver
+    must "flywheel" or maintain a steady beat on its own between valid
+    measurements.
+  - Phase Detection: As each Wi-Fi packet arrives, the receiver
+    timestamps it using its local clock. It compares the inter-arrival
+    time against the expected 1.000000-second interval to calculate a
+    phase error.
+  - Minimum-Delay Filtering: Because Wi-Fi jitter is strictly
+    right-skewed (packets can be delayed but never early), simple
+    mathematical averaging fails. Instead, algorithms use a "lucky
+    packet" or minimum-filter approach. The system observes a wide
+    window of packets (e.g., 64 seconds) and heavily weights the
+    packets with the shortest transit times, as these represent the
+    truest path with the least contention delay.
+  - Narrow Loop Bandwidth: The filtered error signal is fed into a
+    loop filter with a very long time constant. This intentionally
+    makes the system sluggish to react. It entirely ignores rapid
+    packet-to-packet swings, gently steering the frequency of the
+    local oscillator to match the long-term trend of the incoming
+    packets.
+
+The fundamental reason this succeeds is that network transport does
+not create or destroy packets; it only shifts them in time. The
+long-term integral of the frequency error is strictly zero. By
+extending the averaging window, the high-frequency Wi-Fi jitter is
+completely attenuated. The output's precision becomes a hybrid: the
+short-term precision (low jitter) is provided by the receiver's local
+oscillator, while the long-term precision (zero wander) is anchored by
+the distant GPS clock.
+
+Because you are intentionally sacrificing accuracy (ignoring the fixed
+latency offset) to isolate the stable frequency, you can successfully
+reconstruct a highly precise clock over a heavily jittered Wi-Fi link.
+
+
+## Theory of digital PLL (PI controller)
 
 In an analog PLL, you have physical resistors and capacitors. The
 'tank' capacitor and the charge pump current define the loop filter
@@ -132,9 +237,10 @@ is how the analog concepts map to software:
 Damping Factor (`zeta`) is roughly proportional to `K_p / sqrt(K_i)`.
 Formulas are implemented in the python code for the first version and
 in C code for the second to calculate K_p and K_i values given the
-desired loop bandwidth and zeta. Both versions implements standard
-formulas for the `Natural Frequency Mapping`, derived using `Impulse
-Invariant Mapping`.
+desired loop bandwidth and zeta. 
+
+Both versions implement standard formulas for the Natural Frequency
+Mapping, derived using the Bilinear Transform.
 
 Every time a ref packet arrives, you measure the error.  Because your
 `K_p` and `K_i` are tiny, the software loop barely reacts to a single
@@ -215,3 +321,11 @@ between 60 and 70 degrees is widely considered the "sweet spot." It
 guarantees robust stability across variations in temperature,
 manufacturing tolerances, and voltage, while keeping the system highly
 responsive.
+
+
+# A note on FPGA implementation:
+
+See this document:
+
+[FPGA Implementation of a Digital Phase-Locked Loop (DPLL)](https://docs.google.com/document/d/1AqE1ZTA9OA5YUef1ewwuRbSqVJFMEHu2YOxjFeLPDT0/edit?usp=sharing)
+
